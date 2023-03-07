@@ -7,6 +7,7 @@ class VariableTree:
     head = None
 
     def __init__(self, max_depth=4):
+        self.max_depth = max_depth
         self.dtr = DecisionTreeRegressor(max_depth=max_depth)
         self.features = None
 

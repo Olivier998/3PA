@@ -31,7 +31,8 @@ THRESHOLD = 0.5
 tool_header = Div(text="""<b>Predictive-Performance-Precision-Analysis Tool </b>""",
                   sizing_mode="stretch_width", height=100, align="center",
                   styles={"text-align": "center", "background": "grey",
-                          "font-size": FontSize.TITLE})
+                          "font-size": FontSize.TITLE},
+                  stylesheets=[":host {height: 5vw;}"])
 
 
 # ## Data selection section

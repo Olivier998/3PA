@@ -1,6 +1,7 @@
 from bokeh.layouts import row, column, layout
-from bokeh.models import Div, RangeSlider, Spinner, Slider, Arrow, NormalHead
+from bokeh.models import Div, RangeSlider, Spinner, Slider, Arrow, NormalHead, Rect, Label, WheelZoomTool
 from bokeh.plotting import figure
+from bokeh.models.callbacks import CustomJS
 
 # Select a color palette
 from bokeh.palettes import Colorblind8 as palette
@@ -28,9 +29,10 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filen
 
     # Tool header
     tool_header = Div(text=f"<b>MDR (Positive weight = {pos_class_weight})</b>",
-                      sizing_mode="stretch_width", height=100, align="center",
+                      sizing_mode="stretch_width", align="center",  # height="5vw" ,
                       styles={"text-align": "center", "background": "grey",
-                              "font-size": FontSize.TITLE})
+                              "font-size": FontSize.TITLE},
+                      stylesheets=[":host {height: 5vw;}"])
 
     slider_dr = Slider(start=0, end=100, value=100, step=1, title='Declaration Rate',
                        sizing_mode="stretch_width",
@@ -64,6 +66,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filen
 
     # Plot metrics
     plot_metrics = figure(x_axis_label='Declaration Rate', y_axis_label='Metrics score')
+    plot_metrics.axis.axis_label_text_font_style = 'bold'
     for metric_name, color in zip(metrics, colors):
         plot_metrics.line(dr, [mdr_depth[i][metric_name] for i in range(len(mdr_depth))],
                           legend_label=metric_name, line_width=2, color=color)
@@ -75,7 +78,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filen
     plot_metrics.right = plot_metrics.legend
 
     # Plot tree
-    plot_tree = figure()
+    plot_tree = figure()#tools=WheelZoomTool())
     plot_tree.axis.visible = False
     plot_tree.grid.visible = False
 
@@ -84,11 +87,51 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filen
 
     # second layer
     plot_tree.rect(x=-20, y=-15, width=20, height=10, fill_color='white', line_color='black', line_width=2)
-    plot_tree.rect(x=20, y=-15, width=20, height=10, fill_color='white', line_color='black', line_width=2)
+    #plot_tree.rect(x=20, y=-15, width=20, height=10, fill_color='white', line_color='black', line_width=2)
+    rect_1 = Rect(x=20, y=-15, width=20, height=10, fill_color='white', line_color='black', line_width=2)
+    plot_tree.add_glyph(rect_1)
+
+    text = Label(text="AUC = 1.00", x=-29, y=-10-2, tags=[1])  # , text_font_size='2vh'
+    text2 = Label(text="AUC = 0.90", x=-29, y=-10-4, tags=[2])  # , text_font_size='2vh'
+    #text.text_font_size = "100%"
+    cjs = CustomJS(args=dict(labels=[text, text2], label=text, label2=text2, rect=rect_1, figure=plot_tree), code="""
+    var ratio = (6 * rect.width.value / (figure.x_range.end-figure.x_range.start));
+    console.log(labels)
+    console.log(labels.length)
+    for (let i = 0; i < labels.length; i++){
+        labels[i].text_font_size = ratio+'vw';
+    }
+    """)
+
+    """var ratio = (6 * rect.width.value / (figure.x_range.end-figure.x_range.start));
+    for (let i = 0; i < labels.length; i++){
+        labels[i].text_font_size = ratio+'vw';
+        labels[i].emit();
+    }
+    
+    label.text_font_size =  ratio+'vw';
+    label2.text_font_size =  ratio+'vw';
+    
+    label.y = -10 - 2;
+    label2.y = -10 - 4;
+    
+    
+    label.change.emit();
+    label2.change.emit();"""
+
+    # console.log(rect.width);
+    # console.log(figure.x_range.start);
+    plot_tree.add_layout(text)
+    plot_tree.add_layout(text2)
+
+    plot_tree.x_range.js_on_change('start', cjs)
+    plot_tree.x_range.js_on_change('end', cjs)
+    #plot_tree.js_on_change('x_range', cjs)
+    #plot_tree.on_change('x_range', cjs)
 
     # Arrows of second layer
-    plot_tree.add_layout(Arrow(x_start=0, y_start=-5, x_end=-20, y_end=-10, end=NormalHead()))
-    plot_tree.add_layout(Arrow(x_start=0, y_start=-5, x_end=20, y_end=-10, end=NormalHead()))
+    plot_tree.add_layout(Arrow(x_start=0, y_start=-5, x_end=-20, y_end=-10, end=None))
+    plot_tree.add_layout(Arrow(x_start=0, y_start=-5, x_end=20, y_end=-10, end=None))
 
     #tt1 = Div(text="Box1")
     #tt2 = Div(text="Box2")
