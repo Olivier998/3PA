@@ -222,16 +222,11 @@ slider_weight = Slider(start=0, end=1, value=0.5, step=0.01, title='Positive cla
                        sizing_mode="stretch_width",
                        styles={"text-align": "center", "font-size": FontSize.NORMAL, "padding": "0.5vw"})
 
-slider_tree_depth = Slider(start=0, end=8, value=8, step=1, title='Tree depth',
-                           sizing_mode="stretch_width",
-                           styles={"text-align": "center", "font-size": FontSize.NORMAL, "padding": "0.5vw"})
-
 # Outline of the 'Generate MDR' section
 outline_generate_mdr = column(column(generate_mdr_header,
                                      row(bttn_generate_mdr,
                                          txt_filename,
                                          slider_weight,
-                                         slider_tree_depth,
                                          predictive_variables,
                                          align='center',
                                          sizing_mode="stretch_width"),
@@ -246,7 +241,6 @@ def action_bttn_generate_mdr(event):
                  y=imported_data[selected_dependant_variables[TRUE_LABEL]],
                  predicted_prob=imported_data[selected_dependant_variables[PRED_PROB]],
                  pos_class_weight=slider_weight.value,
-                 tree_depth=slider_tree_depth.value,
                  filename=txt_filename.value)
 
 
