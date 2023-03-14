@@ -10,6 +10,7 @@ class VariableTree:
         self.max_depth = max_depth
         self.dtr = DecisionTreeRegressor(max_depth=max_depth)
         self.features = None
+        self.nb_nodes = 0
 
     def fit(self, X, y):
         self.dtr.fit(X, y)
@@ -30,6 +31,8 @@ class VariableTree:
         return predictions
 
     def add_children(self, node_id, X, y):
+        self.nb_nodes += 1
+
         left_child = self.dtr.tree_.children_left[node_id]
         right_child = self.dtr.tree_.children_right[node_id]
 
@@ -37,7 +40,7 @@ class VariableTree:
 
         # If we are at a leaf
         if left_child == -1:
-            curr_node = _Node(value=node_value)
+            curr_node = _Node(value=node_value, node_id=self.nb_nodes)
             return curr_node
 
         node_thresh = self.dtr.tree_.threshold[node_id]
@@ -47,7 +50,7 @@ class VariableTree:
         curr_node = _Node(value=node_value,
                           threshold=node_thresh,
                           feature=node_feature,
-                          feature_id=node_feature_id)
+                          feature_id=node_feature_id, node_id=self.nb_nodes)
 
         curr_node.c_left = self.add_children(left_child,
                                              X=X.loc[X[node_feature] <= node_thresh],
@@ -63,11 +66,12 @@ class _Node:
     c_left = None
     c_right = None
 
-    def __init__(self, value, threshold=None, feature=None, feature_id=None):
+    def __init__(self, value, threshold=None, feature=None, feature_id=None, node_id=0):
         self.value = value
         self.threshold = threshold
         self.feature = feature
         self.feature_id = feature_id
+        self.node_id = node_id
 
     def predict(self, X, depth):
         if depth == 0 or self.c_left is None:

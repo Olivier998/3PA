@@ -1,6 +1,6 @@
 import inspect
 import numpy as np
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, recall_score
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, recall_score, roc_auc_score
 
 
 def filter_dict(func, **kwarg_dict):
@@ -28,6 +28,10 @@ def get_mdr(Y_target, Y_predicted, predicted_accuracies):
 
     for perc_acc in unique_accuracies:
         dr = sum(predicted_accuracies >= perc_acc) / len(Y_target)
+        auc = roc_auc_score(Y_target[predicted_accuracies >= perc_acc],
+                            Y_predicted[predicted_accuracies >= perc_acc]) if \
+            len(np.unique(Y_target[predicted_accuracies >= perc_acc])) > 1 else 0
+        perc_node = sum(predicted_accuracies >= perc_acc) / len(Y_target)
         acc = accuracy_score(Y_target[predicted_accuracies >= perc_acc],
                              Y_predicted[predicted_accuracies >= perc_acc])
         bal_acc = balanced_accuracy_score(Y_target[predicted_accuracies >= perc_acc],
@@ -39,7 +43,7 @@ def get_mdr(Y_target, Y_predicted, predicted_accuracies):
                                    Y_predicted[predicted_accuracies >= perc_acc]
                                    , pos_label=0, zero_division=0)
         mdr_values.append({'dr': dr, 'accuracy': acc, 'bal_acc': bal_acc,
-                           'sens': sensitivity, 'spec': specificity})
+                           'sens': sensitivity, 'spec': specificity, 'auc': auc})
 
     mdr_values = np.array(mdr_values)
 

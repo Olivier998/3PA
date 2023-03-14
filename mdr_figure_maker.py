@@ -24,7 +24,18 @@ from utils import get_mdr
 import numpy as np
 
 THRESHOLD = 0.5
-METRICS = ['bal_acc', 'sens', 'spec']
+
+# Metrics names
+AUC = 'auc'
+BAL_ACC = 'bal_acc'
+MEAN_CA = 'mean_ca'
+PERC_POP = 'perc_pop'
+PERC_NODE = 'perc_node'
+SENSITIVITY = 'sens'
+SPECIFICITY = 'spec'
+
+METRICS = [BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, MEAN_CA, PERC_POP, PERC_NODE]
+METRICS_MDR = [BAL_ACC, SENSITIVITY, SPECIFICITY, AUC]
 
 
 def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filename=None):
@@ -87,7 +98,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filen
     # Plot metrics
     plot_metrics = figure(x_axis_label='Declaration Rate', y_axis_label='Metrics score')
     plot_metrics.axis.axis_label_text_font_style = 'bold'
-    for metric_name, color in zip(METRICS, colors):
+    for metric_name, color in zip(METRICS_MDR, colors):
         plot_metrics.line(x='dr', y=metric_name,
                           legend_label=metric_name, line_width=2, color=color, source=mdr_current_data)
 
@@ -101,117 +112,136 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filen
     plot_tree.grid.visible = False
 
     # Get tree nodes
-    tree_getter = TreeTranscriber(tree=ca_profile, dimensions=[20, 10], min_ratio_leafs=0.5)
-    nodes, arrows = tree_getter.render_to_bokeh(x=x, y_true=y, y_prob=predicted_prob, min_cas=min_cas, depth=2)
+    tree_getter = TreeTranscriber(tree=ca_profile, dimensions=[20, 16], min_ratio_leafs=0.5, metrics=METRICS)
+    nodes, arrows, nodes_text = tree_getter.render_to_bokeh(x=x, y_true=y, y_prob=predicted_prob, min_cas=min_cas,
+                                                            depth=slider_depth.value)
     for node in nodes:
         plot_tree.add_glyph(node)
 
     for arrow in arrows:
         plot_tree.add_layout(arrow)
 
-    # test
-    labels = ColumnDataSource(data=dict(x=[-9, -9, -9],
-                                        y=[3, 1, -1],
-                                        label=[0, 1, 0],
-                                        values=['salut', 'auc = 0.5', 'spec=9']))
-    labels2 = ColumnDataSource(data=dict(x=[-9],
-                                         y=[3],
-                                         label=[0],
-                                         values=['salut']))
+    # from list of dict to dict
+    nodes_text_dict = {k: [dic[k] for dic in nodes_text] for k in nodes_text[0]}
 
-    active = list(range(3))
-    filter = IndexFilter(indices=active)
+    nodes_labels = ColumnDataSource(data=nodes_text_dict)
+    nodes_labelset = LabelSet(x='x', y='y', text='text', source=nodes_labels)
+    plot_tree.add_layout(nodes_labelset)
 
-    labelset = LabelSet(x='x', y='y', text='values', source=labels2)
-    plot_tree.add_layout(labelset)  # , view=view
+    # Set nodes text values
+    for text_id in range(len(nodes_labels.data['x'])):
+        if nodes_labels.data['curr_depth'][text_id] <= slider_depth.value:
+            node_id = nodes_labels.data['node_id'][text_id]
+            curr_metric = nodes_labels.data['metric'][text_id]
+            for node in nodes:
+                if node.tags[0]['node_id'] == node_id:
+                    id_depth = node.tags[1]['depth'].index(slider_depth.value)
+                    node_values = node.tags[1]['values'][id_depth]
+                    dr_array = np.array(node_values['dr'])
+                    id_min_dr = dr_array[dr_array <= slider_dr.value / 100].argmax()
+                    metric_value = node_values['metrics'][id_min_dr][curr_metric]
+                    nodes_labels.data['text'][text_id] = f'{curr_metric} = {metric_value}'
+                    break
 
-    callback = CustomJS(args=dict(src=labels, lsrc=labels2, filt=filter), code='''
-    filt.indices = [cb_obj.value];//[...Array(cb_obj.value).keys()];
-    src.change.emit();
-
-    var data=src.data;
-    var l=data['label'];
-    var x=data['x'];
-    var y=data['y'];
-    var values=data['values'];
-
-    var ldata=lsrc.data;
-    var a=[cb_obj.value];//[...Array(cb_obj.value).keys()];
-
-    var ll=[];
-    var lv=[];
-    var lx=[];
-    var ly=[];
-    for(var i=0;i<a.length;i++){
-        ll.push(l[a[i]]);
-        lx.push(x[a[i]]);
-        ly.push(y[a[i]]);
-        lv.push(values[a[i]]);
-    }
-
-    ldata['label']=ll;
-    ldata['x']=lx;
-    ldata['y']=ly;
-    ldata['values']=lv;
-    lsrc.change.emit();
-    ''')
-
-    cjs = CustomJS(args=dict(labels=[labelset], width=20, figure=plot_tree), code="""
-    var ratio = (6 * width / (figure.x_range.end-figure.x_range.start));
+    cjs = CustomJS(args=dict(labels=[nodes_labelset], width=20, figure=plot_tree), code="""
+    var ratio = (4 * width / (figure.x_range.end-figure.x_range.start));
     for (let i = 0; i < labels.length; i++){
         labels[i].text_font_size = ratio+'vw';
     }
     """)
     plot_tree.x_range.js_on_change('start', cjs)
 
-    callback2 = CustomJS(args=dict(source=labels), code="""
-        source.change.emit();
-    """)
-    slider_dr.js_on_change('value', callback)
-
-    callback_depth = CustomJS(args=dict(src=mdr_depths_data, curr=mdr_current_data, slider=slider_depth, nodes=nodes),
-                              code='''
-    var depth=slider.value;
-    
+    str_update_mdr = """
     // Change the MDR section
     var data=src.data;
     var depths=data['depth'];
     var values=data['values'];
     
-    var depth_index=depths.indexOf(depth);
+    var depth_index=depths.indexOf(slider_depth.value);
     
     curr.data=values[depth_index];
     curr.change.emit();
+    """
+
+    str_update_profile = """
+    function find_smallest_id(arr, value)
+    {  // Returns the id of the closest item in arr that is <= than value
+        var n = arr.length;
+        var smallest_id = -1;
+        var smallest_value = -Infinity;
+        for (var i = 0; i < n; i++)
+        {
+            if(smallest_value < arr[i] && arr[i] <= value)
+            {
+                smallest_id = i;
+                smallest_value = arr[i];
+            }
+        }
+        return smallest_id;
+    }                          
+                  
+    var depth=slider_depth.value;
     
     // Change the Profile section
-    console.log(nodes[0].tags[1]);
-    for (var i=0; i< nodes.length; i++){
-        if (nodes[i].tags[0] > depth){
-            nodes[i].line_alpha = 0;
+    for (var i=0; i< nodes.length; i++)
+    {
+        if (nodes[i].tags[0]['curr_depth'] > depth)
+        {
+            var remove_node = true;
         }
-        else{
-            nodes[i].line_alpha=1;
+        else
+        {
+            var id_depth = nodes[i].tags[1]['depth'].indexOf(depth);
+            var node_values = nodes[i].tags[1]['values'][id_depth];
+            var id_min_dr = find_smallest_id(node_values['dr'], slider_dr.value/100);
+            
+            if (id_min_dr == -1)
+            {
+                var remove_node = true;
+            }
+            else
+            {
+                var remove_node = false;
+            }
+        }
+        if (remove_node)
+        {  // Remove text of the node
+            nodes[i].line_alpha = 0;
+            for (var j=0; j< labels.data['text'].length; j++)
+            {
+                if (nodes[i].tags[0]['node_id'] == labels.data['node_id'][j])
+                {
+                    labels.data['text'][j] = '';
+                }
+            }
+        }
+        else 
+        {
+            nodes[i].line_alpha = 1;
+            for (var j=0; j< labels.data['text'].length; j++)
+            {
+                if (nodes[i].tags[0]['node_id'] == labels.data['node_id'][j])
+                {
+                    var met_name = labels.data['metric'][j]
+                    var met_value = node_values['metrics'][id_min_dr][met_name]
+                    labels.data['text'][j] = met_name + ' = ' + met_value;
+                    nodes[i].line_alpha = 1;
+                }
+            }
         }
     }
-    
-    ''')
+    labels.change.emit();
+    """
+
+    callback_dr = CustomJS(args=dict(slider_depth=slider_depth, slider_dr=slider_dr, nodes=nodes, labels=nodes_labels),
+                           code=str_update_profile)
+    callback_depth = CustomJS(args=dict(src=mdr_depths_data, curr=mdr_current_data, slider_depth=slider_depth,
+                                        slider_dr=slider_dr, nodes=nodes, labels=nodes_labels),
+                              code=str_update_profile + str_update_mdr)
+
+    # set callback actions
     slider_depth.js_on_change('value', callback_depth)
-
-
-
-
-    # js_filter = CustomJSFilter(args=dict(slider=slider_dr), code="""  # , source=labels
-    #    if (slider.value >50){
-    #        desiredElementCount=3;
-    #    }
-    #    else {
-    #    desiredElementCount =2;
-    #    }#
-    #
-    #        return [...Array(desiredElementCount).keys()];
-    #   """)
-
-    #  view = CDSView(filter=[js_filter])
+    slider_dr.js_on_change('value', callback_dr)
 
     # We set the two box (extracted profiles and MDR curves)
     outline_boxs = row(
@@ -243,7 +273,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filen
     layout_output = layout([
         tool_header,
         row(slider_dr,
-        slider_depth, sizing_mode="stretch_width"),
+            slider_depth, sizing_mode="stretch_width"),
         [outline_boxs],
     ],
         sizing_mode="stretch_both")
@@ -267,7 +297,6 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filen
 if __name__ == '__main__':
     # prepare some data
     import pandas as pd
-    import numpy as np
 
     x = pd.DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]],
                      columns=['a', 'b', 'c'])  # [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
