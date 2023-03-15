@@ -18,6 +18,7 @@ import os
 import webbrowser
 
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import GridSearchCV
 from tree_structure import VariableTree
 from tree_transcriber import TreeTranscriber
 from utils import get_mdr
@@ -27,18 +28,25 @@ THRESHOLD = 0.5
 
 # Metrics names
 AUC = 'auc'
+ACC = 'accuracy'
 BAL_ACC = 'bal_acc'
 MEAN_CA = 'mean_ca'
 PERC_POP = 'perc_pop'
 PERC_NODE = 'perc_node'
 SENSITIVITY = 'sens'
 SPECIFICITY = 'spec'
+DR = 'dr'
+
+METRICS_DISPLAY = {AUC: 'Auc', BAL_ACC: 'Bal Acc', MEAN_CA: 'Mean CA',
+                   PERC_POP: '% pop', PERC_NODE: '% node', SENSITIVITY: 'sens',
+                   SPECIFICITY: 'spec', DR: 'DR', ACC: 'Acc'}
 
 METRICS = [BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, MEAN_CA, PERC_POP, PERC_NODE]
-METRICS_MDR = [BAL_ACC, SENSITIVITY, SPECIFICITY, AUC]
+METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPECIFICITY, AUC]]
 
 
-def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filename=None):
+def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
+    print('Starting MDR process')
     # Tool header
     tool_header = Div(text=f"<b>MDR (Positive weight = {pos_class_weight})</b>",
                       sizing_mode="stretch_width", align="center",  # height="5vw" ,
@@ -61,8 +69,31 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filen
     error_prob = 1 - np.abs(y - predicted_prob)
     sample_weight = np.array([pos_class_weight if yi == 1 else 1 - pos_class_weight for yi in y])
 
+    # Parameter grid
+    param_grid = {
+        'max_depth': [None, 75, 150],
+        'max_features': [0.3, 0.6, 1.0],
+        'max_samples': [0.3, 0.6, 1.0],
+        'min_samples_leaf': [0.05, 0.1, 1],
+        'n_estimators': [10, 100, 500, 1000]
+    }
+
+    # Base model
     ca_rf = RandomForestRegressor()
-    ca_rf.fit(x, error_prob, sample_weight=sample_weight)
+
+    # Instantiate the grid search model
+    print('Hyperparameter optimization')
+    grid_search = GridSearchCV(estimator=ca_rf, param_grid=param_grid,
+                               cv=min(4, int(x.shape[0]/2)), n_jobs=-1, verbose=0)
+
+    # Fit the grid search to the data
+    grid_search.fit(x, error_prob, sample_weight=sample_weight)
+    print(grid_search.best_params_)
+
+    # Get best model
+    ca_rf = grid_search.best_estimator_
+
+    # ca_rf.fit(x, error_prob, sample_weight=sample_weight)
     ca_rf_values = ca_rf.predict(x)
 
     ca_profile = VariableTree(max_depth=slider_depth.end)
@@ -82,7 +113,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filen
         # Get mdr values for every depth
         mdr_values = get_mdr(y, y_pred, min_values_depth)
         # from list of dicts to dict
-        mdr_dict = {k: [dic[k] for dic in mdr_values] for k in mdr_values[0]}
+        mdr_dict = {METRICS_DISPLAY[k]: [dic[k] for dic in mdr_values] for k in mdr_values[0]}
 
         # Save values
         mdr_depths_dict['depth'].append(depth)
@@ -96,10 +127,10 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filen
     colors = itertools.cycle(palette)
 
     # Plot metrics
-    plot_metrics = figure(x_axis_label='Declaration Rate', y_axis_label='Metrics score')
+    plot_metrics = figure(x_axis_label='Declaration Rate', y_axis_label='Metrics score', sizing_mode='scale_width')
     plot_metrics.axis.axis_label_text_font_style = 'bold'
     for metric_name, color in zip(METRICS_MDR, colors):
-        plot_metrics.line(x='dr', y=metric_name,
+        plot_metrics.line(x=METRICS_DISPLAY[DR], y=metric_name,
                           legend_label=metric_name, line_width=2, color=color, source=mdr_current_data)
 
     # Setup legend
@@ -107,7 +138,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filen
     plot_metrics.right = plot_metrics.legend
 
     # Plot tree
-    plot_tree = figure(aspect_ratio=1, aspect_scale=1, match_aspect=True)  # tools=WheelZoomTool())
+    plot_tree = figure(aspect_ratio=1, aspect_scale=1, match_aspect=True,
+                       sizing_mode='scale_width')  # tools=WheelZoomTool())
     plot_tree.axis.visible = False
     plot_tree.grid.visible = False
 
@@ -129,19 +161,50 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filen
     plot_tree.add_layout(nodes_labelset)
 
     # Set nodes text values
+    """
     for text_id in range(len(nodes_labels.data['x'])):
         if nodes_labels.data['curr_depth'][text_id] <= slider_depth.value:
             node_id = nodes_labels.data['node_id'][text_id]
             curr_metric = nodes_labels.data['metric'][text_id]
             for node in nodes:
                 if node.tags[0]['node_id'] == node_id:
-                    id_depth = node.tags[1]['depth'].index(slider_depth.value)
-                    node_values = node.tags[1]['values'][id_depth]
-                    dr_array = np.array(node_values['dr'])
-                    id_min_dr = dr_array[dr_array <= slider_dr.value / 100].argmax()
-                    metric_value = node_values['metrics'][id_min_dr][curr_metric]
-                    nodes_labels.data['text'][text_id] = f'{curr_metric} = {metric_value}'
+                    if curr_metric == 'split':
+                        nodes_labels.data['text'][text_id] = node.tags[0]['split']
+                    else:
+                        id_depth = node.tags[1]['depth'].index(slider_depth.value)
+                        node_values = node.tags[1]['values'][id_depth]
+                        dr_array = np.array(node_values['dr'])
+                        id_min_dr = dr_array[dr_array <= slider_dr.value / 100].argmax()
+                        metric_display = METRICS_DISPLAY[curr_metric]
+                        metric_value = node_values['metrics'][id_min_dr][curr_metric]
+                        nodes_labels.data['text'][text_id] = f'{metric_display} = {metric_value}'
                     break
+    """
+    for node in nodes:
+        if node.tags[0]['curr_depth'] > slider_depth.value:
+            remove_node = True
+        else:
+            id_depth = node.tags[1]['depth'].index(slider_depth.value)
+            node_values = node.tags[1]['values'][id_depth]
+            dr_array = np.array(node_values['dr'])
+            id_min_dr = dr_array[dr_array <= slider_dr.value / 100].argmax()
+
+            if id_min_dr == -1:
+                remove_node = True
+            else:
+                remove_node = False
+        if remove_node:
+            node.line_alpha = 0
+        else:
+            for text_id in range(len(nodes_labels.data['x'])):
+                if node.tags[0]['node_id'] == nodes_labels.data['node_id'][text_id]:
+                    curr_metric = nodes_labels.data['metric'][text_id]
+                    if curr_metric == 'split':
+                        nodes_labels.data['text'][text_id] = node.tags[0]['split']
+                    else:
+                        metric_display = METRICS_DISPLAY[curr_metric]
+                        metric_value = node_values['metrics'][id_min_dr][curr_metric]
+                        nodes_labels.data['text'][text_id] = f'{metric_display} = {metric_value}'
 
     cjs = CustomJS(args=dict(labels=[nodes_labelset], width=20, figure=plot_tree), code="""
     var ratio = (4 * width / (figure.x_range.end-figure.x_range.start));
@@ -222,10 +285,17 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filen
             {
                 if (nodes[i].tags[0]['node_id'] == labels.data['node_id'][j])
                 {
-                    var met_name = labels.data['metric'][j]
-                    var met_value = node_values['metrics'][id_min_dr][met_name]
-                    labels.data['text'][j] = met_name + ' = ' + met_value;
-                    nodes[i].line_alpha = 1;
+                    var met_name = labels.data['metric'][j];
+                    if (met_name == 'split')
+                    {
+                        labels.data['text'][j] = nodes[i].tags[0]['split'];
+                    }
+                    else
+                    {
+                        var met_display = metrics_display[met_name];
+                        var met_value = node_values['metrics'][id_min_dr][met_name];
+                        labels.data['text'][j] = met_display + ' = ' + met_value;
+                    }
                 }
             }
         }
@@ -233,10 +303,12 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, tree_depth=2, filen
     labels.change.emit();
     """
 
-    callback_dr = CustomJS(args=dict(slider_depth=slider_depth, slider_dr=slider_dr, nodes=nodes, labels=nodes_labels),
+    callback_dr = CustomJS(args=dict(slider_depth=slider_depth, slider_dr=slider_dr, nodes=nodes, labels=nodes_labels,
+                                     metrics_display=METRICS_DISPLAY),
                            code=str_update_profile)
     callback_depth = CustomJS(args=dict(src=mdr_depths_data, curr=mdr_current_data, slider_depth=slider_depth,
-                                        slider_dr=slider_dr, nodes=nodes, labels=nodes_labels),
+                                        slider_dr=slider_dr, nodes=nodes, labels=nodes_labels,
+                                        metrics_display=METRICS_DISPLAY),
                               code=str_update_profile + str_update_mdr)
 
     # set callback actions

@@ -40,15 +40,21 @@ class TreeTranscriber:
             values_depth_dr['values'].append(mdr_dict)
 
         rect = Rect(x=pos_x, y=pos_y, width=self.width, height=self.height, fill_color='white', line_color='black',
-                    line_width=2, tags=[{'curr_depth': curr_depth, 'node_id': curr_node.node_id},
+                    line_width=2, tags=[{'curr_depth': curr_depth, 'node_id': curr_node.node_id,
+                                         'split': f'{curr_node.feature} <= {round(curr_node.value, 4)}'},
                                         values_depth_dr])
 
-        node_text = [{'x': pos_x - 0.45 * self.width, 'y': pos_y+(0.375 - 0.125 * idx) * self.height, 'text': f'{idx}',
+        node_text = [{'x': pos_x - 0.45 * self.width, 'y': pos_y + (0.375 - 0.125 * idx) * self.height, 'text': '',
                       'metric': metric_name, 'node_id': curr_node.node_id, 'curr_depth': curr_depth}
                      for idx, metric_name in enumerate(self.metrics)]
 
         if remaining_depth == 0 or curr_node.c_left is None:
             return [rect], [], node_text
+        else:
+            # Add split criteria
+            node_text.append({'x': pos_x - 0.45 * self.width, 'y': pos_y - 0.75 * self.height,
+                              'text': f'{curr_node.feature} <= {curr_node.value}',
+                              'metric': 'split', 'node_id': curr_node.node_id, 'curr_depth': curr_depth})
 
         # left child nodes
         pos_x_left = pos_x - 1 / 2 * self.width * (1 + self.min_ratio_leafs) * 2 ** (remaining_depth - 1)

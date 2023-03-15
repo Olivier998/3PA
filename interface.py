@@ -168,7 +168,7 @@ def positive_class_weight(y_true, pos_label=1, **kwargs):
     return len(y_true[y_true == pos_label]) / len(y_true)
 
 
-pos_weight_value = MetricDiv(default_string=metrics_string.format(metric_name="Positive class weight"),
+pos_weight_value = MetricDiv(default_string=metrics_string.format(metric_name="Positive class occurence"),
                              metric_fct=positive_class_weight,
                              **metrics_formatting)
 
@@ -238,8 +238,8 @@ outline_generate_mdr = column(column(generate_mdr_header,
 # Action for bttn_generate_mdr
 def action_bttn_generate_mdr(event):
     generate_mdr(x=imported_data[predictive_variables.value],
-                 y=imported_data[selected_dependant_variables[TRUE_LABEL]],
-                 predicted_prob=imported_data[selected_dependant_variables[PRED_PROB]],
+                 y=imported_data[selected_dependant_variables[TRUE_LABEL]].to_numpy(),
+                 predicted_prob=imported_data[selected_dependant_variables[PRED_PROB]].to_numpy(),
                  pos_class_weight=slider_weight.value,
                  filename=txt_filename.value)
 
