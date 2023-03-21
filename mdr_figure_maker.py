@@ -1,6 +1,5 @@
 from bokeh.layouts import row, column, layout
-from bokeh.models import Div, RangeSlider, Spinner, Slider, LabelSet, ColumnDataSource, CustomJSFilter, CDSView, \
-    IndexFilter, Line
+from bokeh.models import Div, Slider, LabelSet, ColumnDataSource
 from bokeh.plotting import figure
 from bokeh.models.callbacks import CustomJS
 
@@ -59,10 +58,10 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                        sizing_mode="stretch_width",
                        styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
                                "width": "75%", "align-self": "center"})
-    slider_depth = Slider(start=0, end=4, value=4, step=1, title='Tree depth',
-                          sizing_mode="stretch_width",
-                          styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
-                                  "width": "75%", "align-self": "center"})
+    slider_minleaf = Slider(start=5, end=50, value=5, step=5, title='Min sample % in leafs',
+                            sizing_mode="stretch_width",
+                            styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
+                                    "width": "75%", "align-self": "center"})
 
     # Section to train misclassification model
     y_pred = np.array([1 if y_score_i >= THRESHOLD else 0 for y_score_i in predicted_prob])
@@ -71,11 +70,11 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
 
     # Parameter grid
     param_grid = {
-        'max_depth': [None, 75, 150],
-        'max_features': [0.3, 0.6, 1.0],
-        'max_samples': [0.3, 0.6, 1.0],
-        'min_samples_leaf': [0.05, 0.1, 1],
-        'n_estimators': [10, 100, 500, 1000]
+        # 'max_depth': [None, 75, 150],
+        # 'max_features': [0.3, 0.6, 1.0],
+        # 'max_samples': [0.3, 0.6, 1.0],
+        # 'min_samples_leaf': [0.05, 0.1, 1],
+        'n_estimators': [10]  # [10, 100, 500, 1000]
     }
 
     # Base model
@@ -84,7 +83,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     # Instantiate the grid search model
     print('Hyperparameter optimization')
     grid_search = GridSearchCV(estimator=ca_rf, param_grid=param_grid,
-                               cv=min(4, int(x.shape[0]/2)), n_jobs=-1, verbose=0)
+                               cv=min(4, int(x.shape[0] / 2)), n_jobs=-1, verbose=0)
 
     # Fit the grid search to the data
     grid_search.fit(x, error_prob, sample_weight=sample_weight)
@@ -96,32 +95,31 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     # ca_rf.fit(x, error_prob, sample_weight=sample_weight)
     ca_rf_values = ca_rf.predict(x)
 
-    ca_profile = VariableTree(max_depth=slider_depth.end)
+    ca_profile = VariableTree(max_depth=None, min_sample_ratio=slider_minleaf.start)
     ca_profile.fit(x, ca_rf_values)
 
     min_cas = {}
-    mdr_depths_dict = {'depth': [], 'values': []}
-    for depth in range(0, slider_depth.end + 1):
-        if depth == 0:
-            min_values_depth = ca_rf_values
-        else:
-            ca_profile_values = ca_profile.predict(x, depth=depth)
-            min_values_depth = np.array([min(rf_val, prof_val) for rf_val, prof_val in
+    mdr_sampratio_dict = {'samp_ratio': [], 'values': []}
+    for min_perc in range(slider_minleaf.start,
+                          slider_minleaf.end + slider_minleaf.step,
+                          slider_minleaf.step):
+        ca_profile_values = ca_profile.predict(x, min_samples_ratio=min_perc)
+        min_values_sampratio = np.array([min(rf_val, prof_val) for rf_val, prof_val in
                                          zip(ca_rf_values, ca_profile_values)])
-        min_cas[depth] = min_values_depth
+        min_cas[min_perc] = min_values_sampratio
 
-        # Get mdr values for every depth
-        mdr_values = get_mdr(y, y_pred, min_values_depth)
+        # Get mdr values for every samples ratio
+        mdr_values = get_mdr(y, y_pred, min_values_sampratio)
         # from list of dicts to dict
         mdr_dict = {METRICS_DISPLAY[k]: [dic[k] for dic in mdr_values] for k in mdr_values[0]}
 
         # Save values
-        mdr_depths_dict['depth'].append(depth)
-        mdr_depths_dict['values'].append(mdr_dict)
+        mdr_sampratio_dict['samp_ratio'].append(min_perc)
+        mdr_sampratio_dict['values'].append(mdr_dict)
 
-    mdr_depths_data = ColumnDataSource(data=mdr_depths_dict)
-    index_current_data = mdr_depths_dict['depth'].index(slider_depth.value)
-    mdr_current_data = ColumnDataSource(data=mdr_depths_dict['values'][index_current_data])
+    mdr_sampratio_data = ColumnDataSource(data=mdr_sampratio_dict)
+    index_current_data = mdr_sampratio_dict['samp_ratio'].index(slider_minleaf.value)
+    mdr_current_data = ColumnDataSource(data=mdr_sampratio_dict['values'][index_current_data])
 
     # color manager
     colors = itertools.cycle(palette)
@@ -144,9 +142,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     plot_tree.grid.visible = False
 
     # Get tree nodes
-    tree_getter = TreeTranscriber(tree=ca_profile, dimensions=[20, 16], min_ratio_leafs=0.5, metrics=METRICS)
-    nodes, arrows, nodes_text = tree_getter.render_to_bokeh(x=x, y_true=y, y_prob=predicted_prob, min_cas=min_cas,
-                                                            depth=slider_depth.value)
+    tree_getter = TreeTranscriber(tree=ca_profile, dimensions=[20, 16], min_ratio_leafs=0., metrics=METRICS)
+    nodes, arrows, nodes_text = tree_getter.render_to_bokeh(x=x, y_true=y, y_prob=predicted_prob, min_cas=min_cas)
     for node in nodes:
         plot_tree.add_glyph(node)
 
@@ -161,31 +158,12 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     plot_tree.add_layout(nodes_labelset)
 
     # Set nodes text values
-    """
-    for text_id in range(len(nodes_labels.data['x'])):
-        if nodes_labels.data['curr_depth'][text_id] <= slider_depth.value:
-            node_id = nodes_labels.data['node_id'][text_id]
-            curr_metric = nodes_labels.data['metric'][text_id]
-            for node in nodes:
-                if node.tags[0]['node_id'] == node_id:
-                    if curr_metric == 'split':
-                        nodes_labels.data['text'][text_id] = node.tags[0]['split']
-                    else:
-                        id_depth = node.tags[1]['depth'].index(slider_depth.value)
-                        node_values = node.tags[1]['values'][id_depth]
-                        dr_array = np.array(node_values['dr'])
-                        id_min_dr = dr_array[dr_array <= slider_dr.value / 100].argmax()
-                        metric_display = METRICS_DISPLAY[curr_metric]
-                        metric_value = node_values['metrics'][id_min_dr][curr_metric]
-                        nodes_labels.data['text'][text_id] = f'{metric_display} = {metric_value}'
-                    break
-    """
     for node in nodes:
-        if node.tags[0]['curr_depth'] > slider_depth.value:
+        if node.tags[0]['samp_ratio'] < slider_minleaf.value:
             remove_node = True
         else:
-            id_depth = node.tags[1]['depth'].index(slider_depth.value)
-            node_values = node.tags[1]['values'][id_depth]
+            id_samp_ratio = node.tags[1]['samp_ratio'].index(slider_minleaf.value)
+            node_values = node.tags[1]['values'][id_samp_ratio]
             dr_array = np.array(node_values['dr'])
             id_min_dr = dr_array[dr_array <= slider_dr.value / 100].argmax()
 
@@ -194,7 +172,11 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
             else:
                 remove_node = False
         if remove_node:
-            node.line_alpha = 0
+            node.line_alpha = 0.25
+            for arrow in arrows:
+                if arrow.tags[0]['node_id'] == node.tags[0]['node_id']:
+                    arrow.line_alpha = 0.25
+                    break
         else:
             for text_id in range(len(nodes_labels.data['x'])):
                 if node.tags[0]['node_id'] == nodes_labels.data['node_id'][text_id]:
@@ -217,12 +199,12 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     str_update_mdr = """
     // Change the MDR section
     var data=src.data;
-    var depths=data['depth'];
+    var samp_ratios=data['samp_ratio'];
     var values=data['values'];
     
-    var depth_index=depths.indexOf(slider_depth.value);
+    var samp_ratio_index=samp_ratios.indexOf(slider_samp_ratio.value);
     
-    curr.data=values[depth_index];
+    curr.data=values[samp_ratio_index];
     curr.change.emit();
     """
 
@@ -243,19 +225,19 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
         return smallest_id;
     }                          
                   
-    var depth=slider_depth.value;
+    var samp_ratio=slider_samp_ratio.value;
     
     // Change the Profile section
     for (var i=0; i< nodes.length; i++)
     {
-        if (nodes[i].tags[0]['curr_depth'] > depth)
+        if (nodes[i].tags[0]['samp_ratio'] < samp_ratio)
         {
             var remove_node = true;
         }
         else
         {
-            var id_depth = nodes[i].tags[1]['depth'].indexOf(depth);
-            var node_values = nodes[i].tags[1]['values'][id_depth];
+            var id_samp_ratio = nodes[i].tags[1]['samp_ratio'].indexOf(samp_ratio);
+            var node_values = nodes[i].tags[1]['values'][id_samp_ratio];
             var id_min_dr = find_smallest_id(node_values['dr'], slider_dr.value/100);
             
             if (id_min_dr == -1)
@@ -267,9 +249,24 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                 var remove_node = false;
             }
         }
+        for (var arr_id=0; arr_id < arrows.length; arr_id++)
+        {
+            if (arrows[arr_id].tags[0]['node_id'] == nodes[i].tags[0]['node_id'])
+            {
+                if (remove_node)
+                {
+                    arrows[arr_id].line_alpha = 0.25;
+                }
+                else
+                {
+                    arrows[arr_id].line_alpha = 1;
+                }
+            }
+        }
+        
         if (remove_node)
         {  // Remove text of the node
-            nodes[i].line_alpha = 0;
+            nodes[i].line_alpha = 0.25;
             for (var j=0; j< labels.data['text'].length; j++)
             {
                 if (nodes[i].tags[0]['node_id'] == labels.data['node_id'][j])
@@ -303,16 +300,18 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     labels.change.emit();
     """
 
-    callback_dr = CustomJS(args=dict(slider_depth=slider_depth, slider_dr=slider_dr, nodes=nodes, labels=nodes_labels,
+    callback_dr = CustomJS(args=dict(slider_samp_ratio=slider_minleaf, slider_dr=slider_dr,
+                                     nodes=nodes, labels=nodes_labels, arrows=arrows,
                                      metrics_display=METRICS_DISPLAY),
                            code=str_update_profile)
-    callback_depth = CustomJS(args=dict(src=mdr_depths_data, curr=mdr_current_data, slider_depth=slider_depth,
-                                        slider_dr=slider_dr, nodes=nodes, labels=nodes_labels,
-                                        metrics_display=METRICS_DISPLAY),
-                              code=str_update_profile + str_update_mdr)
+    callback_samp_ratio = CustomJS(args=dict(src=mdr_sampratio_data, curr=mdr_current_data,
+                                             slider_samp_ratio=slider_minleaf, slider_dr=slider_dr,
+                                             nodes=nodes, labels=nodes_labels, arrows=arrows,
+                                             metrics_display=METRICS_DISPLAY),
+                                   code=str_update_profile + str_update_mdr)
 
     # set callback actions
-    slider_depth.js_on_change('value', callback_depth)
+    slider_minleaf.js_on_change('value', callback_samp_ratio)
     slider_dr.js_on_change('value', callback_dr)
 
     # We set the two box (extracted profiles and MDR curves)
@@ -345,7 +344,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     layout_output = layout([
         tool_header,
         row(slider_dr,
-            slider_depth, sizing_mode="stretch_width"),
+            slider_minleaf, sizing_mode="stretch_width"),
         [outline_boxs],
     ],
         sizing_mode="stretch_both")
