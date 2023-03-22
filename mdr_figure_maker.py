@@ -1,5 +1,5 @@
 from bokeh.layouts import row, column, layout
-from bokeh.models import Div, Slider, LabelSet, ColumnDataSource
+from bokeh.models import Div, Slider, LabelSet, ColumnDataSource, HoverTool, WheelZoomTool, ResetTool, SaveTool, PanTool
 from bokeh.plotting import figure
 from bokeh.models.callbacks import CustomJS
 
@@ -36,7 +36,7 @@ SENSITIVITY = 'sens'
 SPECIFICITY = 'spec'
 DR = 'dr'
 
-METRICS_DISPLAY = {AUC: 'Auc', BAL_ACC: 'Bal Acc', MEAN_CA: 'Mean CA',
+METRICS_DISPLAY = {AUC: 'Auc', BAL_ACC: 'Bal_Acc', MEAN_CA: 'Mean CA',
                    PERC_POP: '% pop', PERC_NODE: '% node', SENSITIVITY: 'sens',
                    SPECIFICITY: 'spec', DR: 'DR', ACC: 'Acc'}
 
@@ -125,7 +125,16 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     colors = itertools.cycle(palette)
 
     # Plot metrics
-    plot_metrics = figure(x_axis_label='Declaration Rate', y_axis_label='Metrics score', sizing_mode='scale_width')
+    mdr_hover = HoverTool(tooltips=[('Declaration rate', f'@{METRICS_DISPLAY[DR]}'),
+                                    (BAL_ACC, f'@{METRICS_DISPLAY[BAL_ACC]}'),
+                                    (SENSITIVITY, f'@{METRICS_DISPLAY[SENSITIVITY]}'),
+                                    (SPECIFICITY, f'@{METRICS_DISPLAY[SPECIFICITY]}'),
+                                    (AUC, f'@{METRICS_DISPLAY[AUC]}'),
+                                    ])
+    mdr_tools = [PanTool(), WheelZoomTool(), SaveTool(), ResetTool(), mdr_hover]
+
+    plot_metrics = figure(x_axis_label='Declaration Rate', y_axis_label='Metrics score', sizing_mode='scale_width',
+                          y_range=(0.45, 1.05), tools=mdr_tools)
     plot_metrics.axis.axis_label_text_font_style = 'bold'
     for metric_name, color in zip(METRICS_MDR, colors):
         plot_metrics.line(x=METRICS_DISPLAY[DR], y=metric_name,
