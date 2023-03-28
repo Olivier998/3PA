@@ -32,15 +32,16 @@ BAL_ACC = 'bal_acc'
 MEAN_CA = 'mean_ca'
 PERC_POP = 'perc_pop'
 PERC_NODE = 'perc_node'
+PERC_POS = 'pos_perc'
 SENSITIVITY = 'sens'
 SPECIFICITY = 'spec'
 DR = 'dr'
 
-METRICS_DISPLAY = {AUC: 'Auc', BAL_ACC: 'Bal_Acc', MEAN_CA: 'Mean CA',
+METRICS_DISPLAY = {PERC_POS: '% positive', AUC: 'Auc', BAL_ACC: 'Bal_Acc', MEAN_CA: 'Mean CA',
                    PERC_POP: '% pop', PERC_NODE: '% node', SENSITIVITY: 'sens',
                    SPECIFICITY: 'spec', DR: 'DR', ACC: 'Acc'}
 
-METRICS = [BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, MEAN_CA, PERC_POP, PERC_NODE]
+METRICS = [PERC_POS, BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, MEAN_CA, PERC_POP, PERC_NODE]
 METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPECIFICITY, AUC]]
 
 
@@ -58,10 +59,15 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                        sizing_mode="stretch_width",
                        styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
                                "width": "75%", "align-self": "center"})
-    slider_minleaf = Slider(start=5, end=50, value=5, step=5, title='Min sample % in leafs',
+    slider_minleaf = Slider(start=0, end=45, value=0, step=5, title='Min sample % in leafs',
                             sizing_mode="stretch_width",
                             styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
                                     "width": "75%", "align-self": "center"})
+    max_depth_log = int(np.log2(x.shape[0]))
+    slider_maxdepth = Slider(start=1, end=max_depth_log, value=max_depth_log, step=5, title='Max depth',
+                             sizing_mode="stretch_width",
+                             styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
+                                     "width": "75%", "align-self": "center"})
 
     # Section to train misclassification model
     y_pred = np.array([1 if y_score_i >= THRESHOLD else 0 for y_score_i in predicted_prob])
@@ -70,15 +76,11 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
 
     # Parameter grid
     param_grid = {
-        # 'max_depth': [None, 75, 150],
-        # 'max_features': [0.3, 0.6, 1.0],
-        # 'max_samples': [0.3, 0.6, 1.0],
-        # 'min_samples_leaf': [0.05, 0.1, 1],
-        'n_estimators': [10]  # [10, 100, 500, 1000]
+        'max_depth': range(2, max_depth_log + 1)
     }
 
     # Base model
-    ca_rf = RandomForestRegressor()
+    ca_rf = RandomForestRegressor(random_state=54288)
 
     # Instantiate the grid search model
     print('Hyperparameter optimization')
@@ -95,7 +97,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     # ca_rf.fit(x, error_prob, sample_weight=sample_weight)
     ca_rf_values = ca_rf.predict(x)
 
-    ca_profile = VariableTree(max_depth=None, min_sample_ratio=slider_minleaf.start)
+    ca_profile = VariableTree(max_depth=max_depth_log, min_sample_ratio=slider_minleaf.start)
     ca_profile.fit(x, ca_rf_values)
 
     min_cas = {}
@@ -139,6 +141,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     for metric_name, color in zip(METRICS_MDR, colors):
         plot_metrics.line(x=METRICS_DISPLAY[DR], y=metric_name,
                           legend_label=metric_name, line_width=2, color=color, source=mdr_current_data)
+        plot_metrics.circle(x=METRICS_DISPLAY[DR], y=metric_name,
+                            line_width=2, color=color, source=mdr_current_data)
 
     # Setup legend
     plot_metrics.legend.click_policy = "hide"
@@ -151,7 +155,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     plot_tree.grid.visible = False
 
     # Get tree nodes
-    tree_getter = TreeTranscriber(tree=ca_profile, dimensions=[20, 16], min_ratio_leafs=0., metrics=METRICS)
+    tree_getter = TreeTranscriber(tree=ca_profile, dimensions=[20, 18], min_ratio_leafs=0., metrics=METRICS)
     nodes, arrows, nodes_text = tree_getter.render_to_bokeh(x=x, y_true=y, y_prob=predicted_prob, min_cas=min_cas)
     for node in nodes:
         plot_tree.add_glyph(node)
@@ -163,7 +167,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     nodes_text_dict = {k: [dic[k] for dic in nodes_text] for k in nodes_text[0]}
 
     nodes_labels = ColumnDataSource(data=nodes_text_dict)
-    nodes_labelset = LabelSet(x='x', y='y', text='text', source=nodes_labels)
+    nodes_labelset = LabelSet(x='x', y='y', text='text', text_font_style='text_font_style', source=nodes_labels)
     plot_tree.add_layout(nodes_labelset)
 
     # Set nodes text values
@@ -235,11 +239,12 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     }                          
                   
     var samp_ratio=slider_samp_ratio.value;
+    var max_depth = slider_maxdepth.value;
     
     // Change the Profile section
     for (var i=0; i< nodes.length; i++)
     {
-        if (nodes[i].tags[0]['samp_ratio'] < samp_ratio)
+        if (nodes[i].tags[0]['samp_ratio'] < samp_ratio || nodes[i].tags[0]['curr_depth'] > max_depth)
         {
             var remove_node = true;
         }
@@ -310,10 +315,12 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     """
 
     callback_dr = CustomJS(args=dict(slider_samp_ratio=slider_minleaf, slider_dr=slider_dr,
+                                     slider_maxdepth=slider_maxdepth,
                                      nodes=nodes, labels=nodes_labels, arrows=arrows,
                                      metrics_display=METRICS_DISPLAY),
                            code=str_update_profile)
     callback_samp_ratio = CustomJS(args=dict(src=mdr_sampratio_data, curr=mdr_current_data,
+                                             slider_maxdepth=slider_maxdepth,
                                              slider_samp_ratio=slider_minleaf, slider_dr=slider_dr,
                                              nodes=nodes, labels=nodes_labels, arrows=arrows,
                                              metrics_display=METRICS_DISPLAY),
@@ -322,6 +329,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     # set callback actions
     slider_minleaf.js_on_change('value', callback_samp_ratio)
     slider_dr.js_on_change('value', callback_dr)
+    slider_maxdepth.js_on_change('value', callback_samp_ratio)
 
     # We set the two box (extracted profiles and MDR curves)
     outline_boxs = row(
@@ -353,6 +361,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     layout_output = layout([
         tool_header,
         row(slider_dr,
+            slider_maxdepth,
             slider_minleaf, sizing_mode="stretch_width"),
         [outline_boxs],
     ],

@@ -2,6 +2,7 @@ from bokeh.models import Rect, Arrow
 from tree_structure import VariableTree, _Node
 import numpy as np
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, recall_score, roc_auc_score
+from layout_parameters import ITALIC_VARS
 
 # Remove scikit warnings
 import warnings
@@ -50,8 +51,9 @@ class TreeTranscriber:
                                          'samp_ratio': curr_node.samples_ratio},
                                         values_sampratio_dr])
 
-        node_text = [{'x': pos_x - 0.45 * self.width, 'y': pos_y + (0.375 - 0.125 * idx) * self.height, 'text': '',
-                      'metric': metric_name, 'node_id': curr_node.node_id, 'curr_depth': curr_depth}
+        node_text = [{'x': pos_x - 0.45 * self.width, 'y': pos_y + (0.375 - 0.12 * idx) * self.height, 'text': '',
+                      'metric': metric_name, 'text_font_style': 'italic' if metric_name in ITALIC_VARS else 'normal',
+                      'node_id': curr_node.node_id, 'curr_depth': curr_depth}
                      for idx, metric_name in enumerate(self.metrics)]
 
         if remaining_depth == 0 or (curr_node.c_left is None and curr_node.c_right is None):
@@ -60,6 +62,7 @@ class TreeTranscriber:
             # Add split criteria
             node_text.append({'x': pos_x - 0.45 * self.width, 'y': pos_y - 0.75 * self.height,
                               'text': f'{curr_node.feature} <= {curr_node.value}',
+                              'text_font_style': 'normal',
                               'metric': 'split', 'node_id': curr_node.node_id, 'curr_depth': curr_depth})
 
         # Child lists
@@ -158,9 +161,10 @@ class MDR:
                                        Y_predicted[pred_cas >= min_perc]
                                        , pos_label=0, zero_division=0)
             mean_ca = np.mean(pred_cas[pred_cas >= min_perc])
+            pos_class_occurence = np.sum(Y_target) / len(Y_target)
             mdr_values.append({'dr': dr, 'accuracy': acc, 'bal_acc': bal_acc,
                                'sens': sensitivity, 'spec': specificity, 'perc_node': perc_node,
-                               'perc_pop': perc_pop, 'auc': auc, 'mean_ca': mean_ca})
+                               'perc_pop': perc_pop, 'auc': auc, 'mean_ca': mean_ca, 'pos_perc': pos_class_occurence})
 
         for i, values in enumerate(mdr_values):
             for metric in values:

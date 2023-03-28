@@ -8,7 +8,7 @@ from sklearn.metrics import balanced_accuracy_score, recall_score, roc_auc_score
 from bokeh.io import curdoc
 from bokeh.layouts import row, column, layout
 from bokeh.models import Slider, Div, FileInput, MultiSelect, Select, Button, TextInput,\
-    SVGIcon
+    SVGIcon, Column, ColumnDataSource, Circle
 from bokeh.plotting import figure
 from functools import partial
 
@@ -70,7 +70,7 @@ sel_pred_prob = Select(title="Predicted probability", options=imported_data.colu
 sel_pred_prob.on_change('value', update_selected_dependant_variables(PRED_PROB))
 
 # Select predictive variables
-predictive_variables = MultiSelect(title="Chosen predictors", sizing_mode="stretch_width",
+predictive_variables = MultiSelect(title="Chosen predictors (second and third layer model)", sizing_mode="stretch_width",
                                    styles={"text-align": "center",
                                            "font-size": FontSize.NORMAL})  # options=imported_data.columns.tolist()
 
@@ -83,9 +83,13 @@ def upload_data(attr, old, new):
 
     # Update selection tools
     sel_true_label.options = imported_data.columns.tolist()
+    sel_true_label.value = sel_true_label.options[0]
+    selected_dependant_variables[TRUE_LABEL] = sel_true_label.value
 #     sel_pred_label.options = imported_data.columns.tolist()
     sel_pred_prob.options = imported_data.columns.tolist()
-    predictive_variables.options = imported_data.columns.tolist()
+    sel_pred_prob.value = sel_pred_prob.options[0]
+    selected_dependant_variables[PRED_PROB] = sel_pred_prob.value
+    # predictive_variables.options = imported_data.columns.tolist()
 
 
 file_inputer = FileInput(title="Upload data file", accept=[".csv"],
@@ -202,6 +206,16 @@ def update_bttn_glob_res(event):
 bttn_update_glob_res.on_click(update_bttn_glob_res)
 
 # ## Generate MDR section
+
+#fig_infos = figure(sizing_mode="scale_height", align="center")  #x_range=(0, 1), y_range=(0, 1),   styles={'height': '10', 'width': '2vw', 'align': 'center'},
+
+#fig_infos.circle(x=0, y=0, radius=0.25)
+#fig_infos.toolbar_location = None
+#fig_infos.axis.visible = False
+#fig_infos.grid.visible = False
+# fig_infos.outline_line_color = None
+
+
 generate_mdr_header = Div(text="""<b>Generate MDR </b>""",
                           sizing_mode="stretch_width", align="center",
                           styles={"text-align": "center", "font-size": FontSize.SUB_TITLE})
@@ -218,14 +232,15 @@ txt_filename = TextInput(title='Tool filename',
                          styles={"text-align": "center", "font-size": FontSize.NORMAL, "padding": "0.5vw"},
                          stylesheets=[".bk-input {font-size: 1vw;}"])
 
-slider_weight = Slider(start=0, end=1, value=0.5, step=0.01, title='Positive class weight',
+slider_weight = Slider(start=0, end=1, value=0.5, step=0.01, title='Positive class weight (second layer model)',
                        sizing_mode="stretch_width",
-                       styles={"text-align": "center", "font-size": FontSize.NORMAL, "padding": "0.5vw"})
+                       styles={"text-align": "center", "font-size": FontSize.NORMAL, "padding": "0.5vw"},
+                       stylesheets=[".bk-input {font-size: 1vw;}"])
 
 # Outline of the 'Generate MDR' section
 outline_generate_mdr = column(column(generate_mdr_header,
                                      row(bttn_generate_mdr,
-                                         txt_filename,
+                                         txt_filename,  # Column(fig_infos, txt_filename),
                                          slider_weight,
                                          predictive_variables,
                                          align='center',

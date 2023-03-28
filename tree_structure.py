@@ -7,7 +7,11 @@ class VariableTree:
     head = None
 
     def __init__(self, max_depth=None, min_sample_ratio=1):
-        self.dtr = DecisionTreeRegressor(max_depth=max_depth, min_samples_leaf=min_sample_ratio/100)
+        if min_sample_ratio == 0:
+            min_sample_ratio = 1
+        else:
+            min_sample_ratio = min_sample_ratio/100
+        self.dtr = DecisionTreeRegressor(max_depth=max_depth, min_samples_leaf=min_sample_ratio, random_state=54288)
         self.features = None
         self.nb_nodes = 0
 
