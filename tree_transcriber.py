@@ -145,7 +145,7 @@ class MDR:
         self.precision = precision
 
     def get_metrics(self, Y_target, Y_predicted, pred_cas, samp_ratio):
-        unique_accuracies = np.sort(np.unique(pred_cas))[::-1]
+        unique_accuracies = np.sort(np.unique(np.round(pred_cas, 3)))[::-1]
         mdr_values = []
 
         for min_perc in unique_accuracies:

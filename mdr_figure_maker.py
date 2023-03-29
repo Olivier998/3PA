@@ -131,9 +131,6 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
         print(f"get mdr {min_perc}: {int(time.time() - curr_time)}s")
         curr_time = time.time()
 
-    print(f"Get mdr: {int(time.time() - curr_time)}s")
-    curr_time = time.time()
-
     mdr_sampratio_data = ColumnDataSource(data=mdr_sampratio_dict)
     index_current_data = mdr_sampratio_dict['samp_ratio'].index(slider_minleaf.value)
     mdr_current_data = ColumnDataSource(data=mdr_sampratio_dict['values'][index_current_data])
@@ -175,6 +172,9 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     # Get tree nodes
     tree_getter = TreeTranscriber(tree=ca_profile, dimensions=[20, 18], min_ratio_leafs=0., metrics=METRICS)
     nodes, arrows, nodes_text = tree_getter.render_to_bokeh(x=x, y_true=y, y_prob=predicted_prob, min_cas=min_cas)
+    print(f"Get tree values: {int(time.time() - curr_time)}s")
+    curr_time = time.time()
+
     for node in nodes:
         plot_tree.add_glyph(node)
 
