@@ -22,6 +22,8 @@ from tree_structure import VariableTree
 from tree_transcriber import TreeTranscriber
 from utils import get_mdr
 import numpy as np
+import time
+
 
 THRESHOLD = 0.5
 
@@ -46,6 +48,7 @@ METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPEC
 
 
 def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
+    curr_time = int(time.time())
     print('Starting MDR process')
     # Tool header
     tool_header = Div(text=f"<b>MDR (Positive weight = {pos_class_weight})</b>",
@@ -90,15 +93,21 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     # Fit the grid search to the data
     grid_search.fit(x, error_prob, sample_weight=sample_weight)
     print(grid_search.best_params_)
+    print(f"HP done: {int(time.time() - curr_time)}s")
+    curr_time = time.time()
 
     # Get best model
     ca_rf = grid_search.best_estimator_
 
     # ca_rf.fit(x, error_prob, sample_weight=sample_weight)
     ca_rf_values = ca_rf.predict(x)
+    print(f"CA RF: {int(time.time() - curr_time)}s")
+    curr_time = time.time()
 
     ca_profile = VariableTree(max_depth=max_depth_log, min_sample_ratio=slider_minleaf.start)
     ca_profile.fit(x, ca_rf_values)
+    print(f"CA PROFILE: {int(time.time() - curr_time)}s")
+    curr_time = time.time()
 
     min_cas = {}
     mdr_sampratio_dict = {'samp_ratio': [], 'values': []}
@@ -118,6 +127,9 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
         # Save values
         mdr_sampratio_dict['samp_ratio'].append(min_perc)
         mdr_sampratio_dict['values'].append(mdr_dict)
+
+    print(f"Get mdr: {int(time.time() - curr_time)}s")
+    curr_time = time.time()
 
     mdr_sampratio_data = ColumnDataSource(data=mdr_sampratio_dict)
     index_current_data = mdr_sampratio_dict['samp_ratio'].index(slider_minleaf.value)
@@ -148,6 +160,9 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     plot_metrics.legend.click_policy = "hide"
     plot_metrics.right = plot_metrics.legend
 
+    print(f"PLOT MDR: {int(time.time() - curr_time)}s")
+    curr_time = time.time()
+
     # Plot tree
     plot_tree = figure(aspect_ratio=1, aspect_scale=1, match_aspect=True,
                        sizing_mode='scale_width')  # tools=WheelZoomTool())
@@ -169,6 +184,9 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     nodes_labels = ColumnDataSource(data=nodes_text_dict)
     nodes_labelset = LabelSet(x='x', y='y', text='text', text_font_style='text_font_style', source=nodes_labels)
     plot_tree.add_layout(nodes_labelset)
+
+    print(f"PLOT TREE: {int(time.time() - curr_time)}s")
+    curr_time = time.time()
 
     # Set nodes text values
     for node in nodes:
@@ -200,6 +218,9 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                         metric_display = METRICS_DISPLAY[curr_metric]
                         metric_value = node_values['metrics'][id_min_dr][curr_metric]
                         nodes_labels.data['text'][text_id] = f'{metric_display} = {metric_value}'
+
+    print(f"PLOT NODES: {int(time.time() - curr_time)}s")
+    curr_time = time.time()
 
     cjs = CustomJS(args=dict(labels=[nodes_labelset], width=20, figure=plot_tree), code="""
     var ratio = (4 * width / (figure.x_range.end-figure.x_range.start));
