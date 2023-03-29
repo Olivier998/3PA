@@ -45,9 +45,14 @@ class TreeTranscriber:
             values_sampratio_dr['samp_ratio'].append(samp_ratio)
             values_sampratio_dr['values'].append(mdr_dict)
 
+        if remaining_depth == 0 or (curr_node.c_left is None and curr_node.c_right is None):
+            node_split = ''
+        else:
+            node_split = f'{curr_node.feature} <= {round(curr_node.threshold, 4)}'
+
         rect = Rect(x=pos_x, y=pos_y, width=self.width, height=self.height, fill_color='white', line_color='black',
                     line_width=2, tags=[{'curr_depth': curr_depth, 'node_id': curr_node.node_id,
-                                         'split': f'{curr_node.feature} <= {round(curr_node.value, 4)}',
+                                         'split': node_split,
                                          'samp_ratio': curr_node.samples_ratio},
                                         values_sampratio_dr])
 
@@ -58,12 +63,12 @@ class TreeTranscriber:
 
         if remaining_depth == 0 or (curr_node.c_left is None and curr_node.c_right is None):
             return [rect], [], node_text
-        else:
-            # Add split criteria
-            node_text.append({'x': pos_x - 0.45 * self.width, 'y': pos_y - 0.75 * self.height,
-                              'text': f'{curr_node.feature} <= {curr_node.value}',
-                              'text_font_style': 'normal',
-                              'metric': 'split', 'node_id': curr_node.node_id, 'curr_depth': curr_depth})
+
+        # Add split criteria
+        node_text.append({'x': pos_x - 0.45 * self.width, 'y': pos_y - 0.75 * self.height,
+                          'text': f'{curr_node.feature} <= {curr_node.threshold}',
+                          'text_font_style': 'normal',
+                          'metric': 'split', 'node_id': curr_node.node_id, 'curr_depth': curr_depth})
 
         # Child lists
         c_rect = [rect]
