@@ -22,7 +22,7 @@ def filter_dict(func, **kwarg_dict):
 
 
 def get_mdr(Y_target, Y_predicted, predicted_accuracies):
-    unique_accuracies = np.sort(np.unique(predicted_accuracies))[::-1]
+    unique_accuracies = np.sort(np.unique(np.round(predicted_accuracies, 3)))[::-1]
 
     mdr_values = []
 

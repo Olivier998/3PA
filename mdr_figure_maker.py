@@ -128,6 +128,9 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
         mdr_sampratio_dict['samp_ratio'].append(min_perc)
         mdr_sampratio_dict['values'].append(mdr_dict)
 
+        print(f"get mdr {min_perc}: {int(time.time() - curr_time)}s")
+        curr_time = time.time()
+
     print(f"Get mdr: {int(time.time() - curr_time)}s")
     curr_time = time.time()
 
