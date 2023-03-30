@@ -61,7 +61,6 @@ def get_mdr(Y_target, Y_predicted, predicted_accuracies):
         dr_accuracy = sorted_accuracies[int(len(sorted_accuracies) * (1 - dr/100))]  # np.percentile(predicted_accuracies, 100 - dr, interpolation="lower")
 
         if dr_accuracy != prev_dr_accuracy:
-            print(f"nb pop {sum(predicted_accuracies >= dr_accuracy)}")
             prev_dr_accuracy = dr_accuracy
             auc = roc_auc_score(Y_target[predicted_accuracies >= dr_accuracy],
                                 Y_predicted[predicted_accuracies >= dr_accuracy]) if \
