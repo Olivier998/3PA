@@ -139,37 +139,45 @@ class TreeTranscriber:
 class MDR:
     def __init__(self, pred_cas, precision=2):
         self.n_total = {samp_ratio: len(pred_cas[samp_ratio]) for samp_ratio in pred_cas}
-        unique_accuracies = {samp_ratio: np.sort(np.unique(pred_cas[samp_ratio]))[::-1] for samp_ratio in pred_cas}
-        self.dr = {samp_ratio: {min_perc: sum(pred_cas[samp_ratio] >= min_perc) / self.n_total[samp_ratio]
-                                for min_perc in unique_accuracies[samp_ratio]} for samp_ratio in pred_cas}
+        #unique_accuracies = {samp_ratio: np.sort(np.unique(pred_cas[samp_ratio]))[::-1] for samp_ratio in pred_cas}
+        #self.dr = {samp_ratio: {min_perc: sum(pred_cas[samp_ratio] >= min_perc) / self.n_total[samp_ratio]
+        #                        for min_perc in unique_accuracies[samp_ratio]} for samp_ratio in pred_cas}
+
+        self.dr = {samp_ratio: {dr: np.sort(pred_cas[samp_ratio])[int(len(pred_cas[samp_ratio]) * (1-dr/100))] for
+                                dr in range(100, 0, -1)} for samp_ratio in pred_cas}
         self.precision = precision
 
     def get_metrics(self, Y_target, Y_predicted, pred_cas, samp_ratio):
-        unique_accuracies = np.sort(np.unique(np.round(pred_cas, 3)))[::-1]
+        # unique_accuracies = np.sort(np.unique(np.round(pred_cas, 3)))[::-1]
+        # sorted_accuracies = np.sort(pred_cas)[::-1]
         mdr_values = []
 
-        for min_perc in unique_accuracies:
-            dr = self.dr[samp_ratio][min_perc]
-            perc_node = sum(pred_cas >= min_perc) / len(Y_target)
-            perc_pop = sum(pred_cas >= min_perc) / self.n_total[samp_ratio]
-            acc = accuracy_score(Y_target[pred_cas >= min_perc],
-                                 Y_predicted[pred_cas >= min_perc])
-            auc = roc_auc_score(Y_target[pred_cas >= min_perc],
-                                Y_predicted[pred_cas >= min_perc]) if \
-                len(np.unique(Y_target[pred_cas >= min_perc])) > 1 else 0
-            bal_acc = balanced_accuracy_score(Y_target[pred_cas >= min_perc],
-                                              Y_predicted[pred_cas >= min_perc])
-            sensitivity = recall_score(Y_target[pred_cas >= min_perc],
-                                       Y_predicted[pred_cas >= min_perc]
-                                       , pos_label=1, zero_division=0)
-            specificity = recall_score(Y_target[pred_cas >= min_perc],
-                                       Y_predicted[pred_cas >= min_perc]
-                                       , pos_label=0, zero_division=0)
-            mean_ca = np.mean(pred_cas[pred_cas >= min_perc])
-            pos_class_occurence = np.sum(Y_target) / len(Y_target)
-            mdr_values.append({'dr': dr, 'accuracy': acc, 'bal_acc': bal_acc,
-                               'sens': sensitivity, 'spec': specificity, 'perc_node': perc_node,
-                               'perc_pop': perc_pop, 'auc': auc, 'mean_ca': mean_ca, 'pos_perc': pos_class_occurence})
+        for dr, dr_accuracy in self.dr[samp_ratio].items():
+            #dr_accuracy = self.dr[samp_ratio][dr]  # np.percentile(pred_cas, 100 - dr, interpolation="lower")
+            if sum(pred_cas >= dr_accuracy) > 0:
+                perc_node = sum(pred_cas >= dr_accuracy) / len(Y_target)
+                perc_pop = sum(pred_cas >= dr_accuracy) / self.n_total[samp_ratio]
+                acc = accuracy_score(Y_target[pred_cas >= dr_accuracy],
+                                     Y_predicted[pred_cas >= dr_accuracy])
+                auc = roc_auc_score(Y_target[pred_cas >= dr_accuracy],
+                                    Y_predicted[pred_cas >= dr_accuracy]) if \
+                    len(np.unique(Y_target[pred_cas >= dr_accuracy])) > 1 else 0
+                #bal_acc = balanced_accuracy_score(Y_target[pred_cas > dr_accuracy],
+                #                                  Y_predicted[pred_cas > dr_accuracy])
+                sensitivity = recall_score(Y_target[pred_cas >= dr_accuracy],
+                                           Y_predicted[pred_cas >= dr_accuracy]
+                                           , pos_label=1, zero_division=0)
+                specificity = recall_score(Y_target[pred_cas >= dr_accuracy],
+                                           Y_predicted[pred_cas >= dr_accuracy]
+                                           , pos_label=0, zero_division=0)
+                bal_acc = (sensitivity + specificity) / 2
+                mean_ca = np.mean(pred_cas[pred_cas >= dr_accuracy]) if pred_cas[pred_cas >= dr_accuracy].size > 0 \
+                    else np.NaN
+                pos_class_occurence = np.sum(Y_target[pred_cas >= dr_accuracy]) / len(Y_target[pred_cas >= dr_accuracy])
+                mdr_values.append({'dr': dr/100, 'accuracy': acc, 'bal_acc': bal_acc,
+                                   'sens': sensitivity, 'spec': specificity, 'perc_node': perc_node,
+                                   'perc_pop': perc_pop, 'auc': auc, 'mean_ca': mean_ca,
+                                   'pos_perc': pos_class_occurence})
 
         for i, values in enumerate(mdr_values):
             for metric in values:

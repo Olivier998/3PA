@@ -199,7 +199,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
             id_samp_ratio = node.tags[1]['samp_ratio'].index(slider_minleaf.value)
             node_values = node.tags[1]['values'][id_samp_ratio]
             dr_array = np.array(node_values['dr'])
-            id_min_dr = dr_array[dr_array <= slider_dr.value / 100].argmax()
+            id_min_dr = dr_array[dr_array <= slider_dr.value / 100].argmax() if \
+                len(dr_array[dr_array <= slider_dr.value / 100]) > 0 else -1
 
             if id_min_dr == -1:
                 remove_node = True
