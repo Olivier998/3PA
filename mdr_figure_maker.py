@@ -24,7 +24,6 @@ from utils import get_mdr
 import numpy as np
 import time
 
-
 THRESHOLD = 0.5
 
 # Metrics names
@@ -51,7 +50,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     curr_time = int(time.time())
     print('Starting MDR process')
     # Tool header
-    tool_header = Div(text=f"<b>MDR (Positive weight = {pos_class_weight})</b>",
+    tool_header = Div(text=f"<b> MDR </b> <small><small>(Positive weight = {pos_class_weight})</small></small>",
                       sizing_mode="stretch_width", align="center",  # height="5vw" ,
                       styles={"text-align": "center", "background": "grey",
                               "font-size": FontSize.TITLE},
@@ -67,7 +66,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                             styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
                                     "width": "75%", "align-self": "center"})
     max_depth_log = int(np.log2(x.shape[0]))
-    slider_maxdepth = Slider(start=1, end=max_depth_log, value=max_depth_log, step=5, title='Max depth',
+    max_depth_profile = min(max_depth_log, 5)
+    slider_maxdepth = Slider(start=1, end=max_depth_profile, value=max_depth_profile, step=1, title='Max depth',
                              sizing_mode="stretch_width",
                              styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
                                      "width": "75%", "align-self": "center"})
@@ -104,7 +104,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     print(f"CA RF: {int(time.time() - curr_time)}s")
     curr_time = time.time()
 
-    ca_profile = VariableTree(max_depth=max_depth_log, min_sample_ratio=slider_minleaf.start)
+    ca_profile = VariableTree(max_depth=max_depth_profile, min_sample_ratio=slider_minleaf.start)
     ca_profile.fit(x, ca_rf_values)
     print(f"CA PROFILE: {int(time.time() - curr_time)}s")
     curr_time = time.time()
@@ -120,9 +120,18 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
         min_cas[min_perc] = min_values_sampratio
 
         # Get mdr values for every samples ratio
-        mdr_values = get_mdr(y, y_pred, min_values_sampratio)
-        # from list of dicts to dict
+        mdr_values = get_mdr(y, y_pred, predicted_prob, min_values_sampratio)
+        # from list of dicts to dict of lists
         mdr_dict = {METRICS_DISPLAY[k]: [dic[k] for dic in mdr_values] for k in mdr_values[0]}
+
+        # add DR with profile disappear threshold
+        unique_ca_profile_values = np.sort(np.unique(ca_profile_values))
+        dr_profile_x = [100 * len(ca_profile_values[ca_profile_values >= min_ca]) / len(ca_profile_values)
+                        for min_ca in unique_ca_profile_values]
+        dr_profile_y = [len(ca_profile_values[ca_profile_values >= min_ca]) / len(ca_profile_values)
+                        for min_ca in unique_ca_profile_values]
+        mdr_dict['dr_profile_x'] = dr_profile_x
+        mdr_dict['dr_profile_y'] = dr_profile_y
 
         # Save values
         mdr_sampratio_dict['samp_ratio'].append(min_perc)
@@ -153,8 +162,13 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     for metric_name, color in zip(METRICS_MDR, colors):
         plot_metrics.line(x=METRICS_DISPLAY[DR], y=metric_name,
                           legend_label=metric_name, line_width=2, color=color, source=mdr_current_data)
-        plot_metrics.circle(x=METRICS_DISPLAY[DR], y=metric_name,
+        plot_metrics.circle(x=METRICS_DISPLAY[DR], y=metric_name, legend_label=metric_name,
                             line_width=2, color=color, source=mdr_current_data)
+
+    plot_metrics.line(x='dr_profile_x', y='dr_profile_y', legend_label='Declaration Rate', color='black',
+                      line_width=2, source=mdr_current_data)
+    plot_metrics.triangle_dot(x='dr_profile_x', y='dr_profile_y', legend_label='Declaration Rate', color='black',
+                              line_width=3, source=mdr_current_data)
 
     # Setup legend
     plot_metrics.legend.click_policy = "hide"

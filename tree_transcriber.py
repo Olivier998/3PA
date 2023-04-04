@@ -38,8 +38,8 @@ class TreeTranscriber:
         y_pred = np.array([1 if y_score_i >= self.THRESHOLD else 0 for y_score_i in y_prob])
 
         for samp_ratio in min_cas:
-            mdr_values = mdr_tool.get_metrics(Y_target=y_true, Y_predicted=y_pred, pred_cas=min_cas[samp_ratio],
-                                              samp_ratio=samp_ratio)
+            mdr_values = mdr_tool.get_metrics(Y_target=y_true, Y_predicted=y_pred, Y_prob=y_prob,
+                                              pred_cas=min_cas[samp_ratio], samp_ratio=samp_ratio)
             mdr_dict = {'dr': [dic['dr'] for dic in mdr_values],
                         'metrics': [{key: value for key, value in dic.items() if key != 'dr'} for dic in mdr_values]}
             values_sampratio_dr['samp_ratio'].append(samp_ratio)
@@ -147,7 +147,7 @@ class MDR:
                                 dr in range(100, 0, -1)} for samp_ratio in pred_cas}
         self.precision = precision
 
-    def get_metrics(self, Y_target, Y_predicted, pred_cas, samp_ratio):
+    def get_metrics(self, Y_target, Y_predicted, Y_prob, pred_cas, samp_ratio):
         # unique_accuracies = np.sort(np.unique(np.round(pred_cas, 3)))[::-1]
         # sorted_accuracies = np.sort(pred_cas)[::-1]
         mdr_values = []
@@ -160,7 +160,7 @@ class MDR:
                 acc = accuracy_score(Y_target[pred_cas >= dr_accuracy],
                                      Y_predicted[pred_cas >= dr_accuracy])
                 auc = roc_auc_score(Y_target[pred_cas >= dr_accuracy],
-                                    Y_predicted[pred_cas >= dr_accuracy]) if \
+                                    Y_prob[pred_cas >= dr_accuracy]) if \
                     len(np.unique(Y_target[pred_cas >= dr_accuracy])) > 1 else 0
                 #bal_acc = balanced_accuracy_score(Y_target[pred_cas > dr_accuracy],
                 #                                  Y_predicted[pred_cas > dr_accuracy])

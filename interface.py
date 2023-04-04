@@ -7,7 +7,7 @@ from sklearn.metrics import balanced_accuracy_score, recall_score, roc_auc_score
 
 from bokeh.io import curdoc
 from bokeh.layouts import row, column, layout
-from bokeh.models import Slider, Div, FileInput, MultiSelect, Select, Button, TextInput,\
+from bokeh.models import Slider, Div, FileInput, MultiSelect, Select, Button, TextInput, \
     SVGIcon, Column, ColumnDataSource, Circle
 from bokeh.plotting import figure
 from functools import partial
@@ -70,7 +70,8 @@ sel_pred_prob = Select(title="Predicted probability", options=imported_data.colu
 sel_pred_prob.on_change('value', update_selected_dependant_variables(PRED_PROB))
 
 # Select predictive variables
-predictive_variables = MultiSelect(title="Chosen predictors (second and third layer model)", sizing_mode="stretch_width",
+predictive_variables = MultiSelect(title="Chosen predictors (second and third layer model)",
+                                   sizing_mode="stretch_width",
                                    styles={"text-align": "center",
                                            "font-size": FontSize.NORMAL})  # options=imported_data.columns.tolist()
 
@@ -85,7 +86,7 @@ def upload_data(attr, old, new):
     sel_true_label.options = imported_data.columns.tolist()
     sel_true_label.value = sel_true_label.options[0]
     selected_dependant_variables[TRUE_LABEL] = sel_true_label.value
-#     sel_pred_label.options = imported_data.columns.tolist()
+    #     sel_pred_label.options = imported_data.columns.tolist()
     sel_pred_prob.options = imported_data.columns.tolist()
     sel_pred_prob.value = sel_pred_prob.options[0]
     selected_dependant_variables[PRED_PROB] = sel_pred_prob.value
@@ -207,12 +208,12 @@ bttn_update_glob_res.on_click(update_bttn_glob_res)
 
 # ## Generate MDR section
 
-#fig_infos = figure(sizing_mode="scale_height", align="center")  #x_range=(0, 1), y_range=(0, 1),   styles={'height': '10', 'width': '2vw', 'align': 'center'},
+# fig_infos = figure(sizing_mode="scale_height", align="center")  #x_range=(0, 1), y_range=(0, 1),   styles={'height': '10', 'width': '2vw', 'align': 'center'},
 
-#fig_infos.circle(x=0, y=0, radius=0.25)
-#fig_infos.toolbar_location = None
-#fig_infos.axis.visible = False
-#fig_infos.grid.visible = False
+# fig_infos.circle(x=0, y=0, radius=0.25)
+# fig_infos.toolbar_location = None
+# fig_infos.axis.visible = False
+# fig_infos.grid.visible = False
 # fig_infos.outline_line_color = None
 
 
@@ -224,6 +225,11 @@ bttn_generate_mdr = Button(label='Generate MDR tool',
                            align='center',
                            styles={'width': '15vw', 'height': '3vw'},
                            stylesheets=[".bk-btn-default {font-size: 1vw; font-weight: bold;}"])
+
+bttn_loading = Div(text="""<b>Loading... </b>""",
+                   visible=False,
+                   sizing_mode="stretch_width", align="center",
+                   styles={"text-align": "center", "font-size": FontSize.NORMAL})
 
 txt_filename = TextInput(title='Tool filename',
                          value="",
@@ -239,7 +245,7 @@ slider_weight = Slider(start=0, end=1, value=0.5, step=0.01, title='Positive cla
 
 # Outline of the 'Generate MDR' section
 outline_generate_mdr = column(column(generate_mdr_header,
-                                     row(bttn_generate_mdr,
+                                     row(column(bttn_loading, bttn_generate_mdr),
                                          txt_filename,  # Column(fig_infos, txt_filename),
                                          slider_weight,
                                          predictive_variables,
@@ -252,11 +258,14 @@ outline_generate_mdr = column(column(generate_mdr_header,
 
 # Action for bttn_generate_mdr
 def action_bttn_generate_mdr(event):
-    generate_mdr(x=imported_data[predictive_variables.value],
-                 y=imported_data[selected_dependant_variables[TRUE_LABEL]].to_numpy(),
-                 predicted_prob=imported_data[selected_dependant_variables[PRED_PROB]].to_numpy(),
-                 pos_class_weight=slider_weight.value,
-                 filename=txt_filename.value)
+    bttn_loading.visible = True  # Doesn't work if applied after "if" verification
+    if not imported_data.empty and predictive_variables.value:
+        generate_mdr(x=imported_data[predictive_variables.value],
+                     y=imported_data[selected_dependant_variables[TRUE_LABEL]].to_numpy(),
+                     predicted_prob=imported_data[selected_dependant_variables[PRED_PROB]].to_numpy(),
+                     pos_class_weight=slider_weight.value,
+                     filename=txt_filename.value)
+    bttn_loading.visible = False
 
 
 bttn_generate_mdr.on_click(action_bttn_generate_mdr)
@@ -272,7 +281,7 @@ layout_output = layout(
                        bttn_update_glob_res,
                        warning_bttn_update_glob_res,
                        sizing_mode="stretch_width",
-                styles={"border": "1px solid black"}),
+                       styles={"border": "1px solid black"}),
                 styles={"padding": "0.5vw"})],  # , sizing_mode="stretch_width", styles={"padding": "0.5vw"})
 
         [column(column(global_results_header,

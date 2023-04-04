@@ -50,7 +50,7 @@ def get_mdr(Y_target, Y_predicted, predicted_accuracies):
     return mdr_values"""
 
 
-def get_mdr(Y_target, Y_predicted, predicted_accuracies):
+def get_mdr(Y_target, Y_predicted, predicted_prob, predicted_accuracies):
     sorted_accuracies = np.sort(predicted_accuracies)  # [::-1]
 
     mdr_values = []
@@ -63,7 +63,7 @@ def get_mdr(Y_target, Y_predicted, predicted_accuracies):
         if dr_accuracy != prev_dr_accuracy:
             prev_dr_accuracy = dr_accuracy
             auc = roc_auc_score(Y_target[predicted_accuracies >= dr_accuracy],
-                                Y_predicted[predicted_accuracies >= dr_accuracy]) if \
+                                predicted_prob[predicted_accuracies >= dr_accuracy]) if \
                 len(np.unique(Y_target[predicted_accuracies >= dr_accuracy])) > 1 else 0
             perc_node = sum(predicted_accuracies >= dr_accuracy) / len(Y_target)
             acc = accuracy_score(Y_target[predicted_accuracies >= dr_accuracy],
