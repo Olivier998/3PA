@@ -17,6 +17,7 @@ import io
 from utils import filter_dict
 from constants import FontSize, TRUE_LABEL, PRED_LABEL, PRED_PROB
 from mdr_figure_maker import generate_mdr
+import time
 
 curr_doc = curdoc()
 
@@ -245,7 +246,7 @@ slider_weight = Slider(start=0, end=1, value=0.5, step=0.01, title='Positive cla
 
 # Outline of the 'Generate MDR' section
 outline_generate_mdr = column(column(generate_mdr_header,
-                                     row(column(bttn_loading, bttn_generate_mdr),
+                                     row(column(bttn_generate_mdr, bttn_loading),
                                          txt_filename,  # Column(fig_infos, txt_filename),
                                          slider_weight,
                                          predictive_variables,
@@ -257,15 +258,21 @@ outline_generate_mdr = column(column(generate_mdr_header,
 
 
 # Action for bttn_generate_mdr
-def action_bttn_generate_mdr(event):
-    bttn_loading.visible = True  # Doesn't work if applied after "if" verification
-    if not imported_data.empty and predictive_variables.value:
-        generate_mdr(x=imported_data[predictive_variables.value],
-                     y=imported_data[selected_dependant_variables[TRUE_LABEL]].to_numpy(),
-                     predicted_prob=imported_data[selected_dependant_variables[PRED_PROB]].to_numpy(),
-                     pos_class_weight=slider_weight.value,
-                     filename=txt_filename.value)
+def generate_mdr_action():
+    generate_mdr(x=imported_data[predictive_variables.value],
+                 y=imported_data[
+                     selected_dependant_variables[TRUE_LABEL]].to_numpy(),
+                 predicted_prob=imported_data[
+                     selected_dependant_variables[PRED_PROB]].to_numpy(),
+                 pos_class_weight=slider_weight.value,
+                 filename=txt_filename.value)
     bttn_loading.visible = False
+
+
+def action_bttn_generate_mdr(event):
+    if not imported_data.empty and predictive_variables.value:
+        bttn_loading.visible = True  # Doesn't work if applied after "if" verification
+        curdoc().add_next_tick_callback(generate_mdr_action)
 
 
 bttn_generate_mdr.on_click(action_bttn_generate_mdr)
