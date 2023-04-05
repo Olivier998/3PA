@@ -126,12 +126,18 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
 
         # add DR with profile disappear threshold
         unique_ca_profile_values = np.sort(np.unique(ca_profile_values))
-        dr_profile_x = [100 * len(ca_profile_values[ca_profile_values >= min_ca]) / len(ca_profile_values)
-                        for min_ca in unique_ca_profile_values]
-        dr_profile_y = [len(ca_profile_values[ca_profile_values >= min_ca]) / len(ca_profile_values)
-                        for min_ca in unique_ca_profile_values]
+        dr_profile = [int(100 * len(min_values_sampratio[min_values_sampratio >= min_ca]) / len(ca_profile_values))
+                      for min_ca in unique_ca_profile_values]
+        # dr_profile_y = [len(min_values_sampratio[min_values_sampratio >= min_ca]) / len(ca_profile_values)
+        #                for min_ca in unique_ca_profile_values]
+
+        dr_profile_x = [dr if dr in dr_profile else np.nan for dr in mdr_dict[METRICS_DISPLAY[DR]]]  # 100 if dr == 100 else
+        dr_profile_y = [dr / 100 if dr in dr_profile else np.nan for dr in  # 1 if dr == 100 else
+                        mdr_dict[METRICS_DISPLAY[DR]]]
+
         mdr_dict['dr_profile_x'] = dr_profile_x
         mdr_dict['dr_profile_y'] = dr_profile_y
+        mdr_dict['dr_profile_y_line'] = [dr / 100 for dr in mdr_dict[METRICS_DISPLAY[DR]]]
 
         # Save values
         mdr_sampratio_dict['samp_ratio'].append(min_perc)
@@ -165,7 +171,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
         plot_metrics.circle(x=METRICS_DISPLAY[DR], y=metric_name, legend_label=metric_name,
                             line_width=2, color=color, source=mdr_current_data)
 
-    plot_metrics.line(x='dr_profile_x', y='dr_profile_y', legend_label='Declaration Rate', color='black',
+    plot_metrics.line(x=METRICS_DISPLAY[DR], y='dr_profile_y_line', legend_label='Declaration Rate', color='black',
                       line_width=2, source=mdr_current_data)
     plot_metrics.triangle_dot(x='dr_profile_x', y='dr_profile_y', legend_label='Declaration Rate', color='black',
                               line_width=3, source=mdr_current_data)
