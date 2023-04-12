@@ -132,12 +132,13 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
         #                for min_ca in unique_ca_profile_values]
 
         dr_profile_x = [dr if dr in dr_profile else np.nan for dr in mdr_dict[METRICS_DISPLAY[DR]]]  # 100 if dr == 100 else
-        dr_profile_y = [dr / 100 if dr in dr_profile else np.nan for dr in  # 1 if dr == 100 else
+        dr_profile_y = [0 if dr in dr_profile else np.nan for dr in  # dr / 100
                         mdr_dict[METRICS_DISPLAY[DR]]]
 
         mdr_dict['dr_profile_x'] = dr_profile_x
         mdr_dict['dr_profile_y'] = dr_profile_y
-        mdr_dict['dr_profile_y_line'] = [dr / 100 for dr in mdr_dict[METRICS_DISPLAY[DR]]]
+        mdr_dict['dr_profile_y_line'] = [0] * len(mdr_dict[METRICS_DISPLAY[DR]])
+        # [0 for dr in mdr_dict[METRICS_DISPLAY[DR]]]  # dr / 100
 
         # Save values
         mdr_sampratio_dict['samp_ratio'].append(min_perc)
@@ -162,7 +163,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                                     ])
     mdr_tools = [PanTool(), WheelZoomTool(), SaveTool(), ResetTool(), mdr_hover]
 
-    plot_metrics = figure(x_axis_label='Declaration Rate', y_axis_label='Metrics score', sizing_mode='scale_width',
+    plot_metrics = figure(y_axis_label='Metrics score', sizing_mode='scale_width',
                           y_range=(0.45, 1.05), tools=mdr_tools)
     plot_metrics.axis.axis_label_text_font_style = 'bold'
     for metric_name, color in zip(METRICS_MDR, colors):
@@ -171,10 +172,24 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
         plot_metrics.circle(x=METRICS_DISPLAY[DR], y=metric_name, legend_label=metric_name,
                             line_width=2, color=color, source=mdr_current_data)
 
-    plot_metrics.line(x=METRICS_DISPLAY[DR], y='dr_profile_y_line', legend_label='Declaration Rate', color='black',
-                      line_width=2, source=mdr_current_data)
-    plot_metrics.triangle_dot(x='dr_profile_x', y='dr_profile_y', legend_label='Declaration Rate', color='black',
+    #plot_metrics.line(x=METRICS_DISPLAY[DR], y='dr_profile_y_line', legend_label='Declaration Rate', color='black',
+    #                  line_width=1, source=mdr_current_data)
+    #plot_metrics.triangle_dot(x='dr_profile_x', y='dr_profile_y', legend_label='Declaration Rate', color='black',
+    #                          line_width=3, source=mdr_current_data)
+
+    plot_metrics_dr = figure(x_axis_label='Declaration Rate', sizing_mode='scale_width',  # height="2vh",
+                             y_range=(-0.1, 0.9), tools="", stylesheets=[":host {height: 25vh;}"])
+
+    plot_metrics_dr.line(x=METRICS_DISPLAY[DR], y='dr_profile_y_line', legend_label='Declaration Rate', color='black',
+                      line_width=1, source=mdr_current_data)
+    plot_metrics_dr.triangle_dot(x='dr_profile_x', y='dr_profile_y', legend_label='Declaration Rate', color='black',
                               line_width=3, source=mdr_current_data)
+    plot_metrics_dr.axis.axis_label_text_font_style = 'bold'
+    plot_metrics_dr.legend.click_policy = "hide"
+    plot_metrics_dr.right = plot_metrics_dr.legend
+    plot_metrics_dr.yaxis.visible = False
+    plot_metrics_dr.ygrid.visible = False
+
 
     # Setup legend
     plot_metrics.legend.click_policy = "hide"
@@ -260,6 +275,14 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     }
     """)
     plot_tree.x_range.js_on_change('start', cjs)
+    plot_tree.x_range.js_on_change('end', cjs)
+
+    # Update DR profiles range when moving in the MDR figure
+    mdr_fig_dr_move = CustomJS(args=dict(figure_mdr=plot_metrics, figure_dr=plot_metrics_dr), code="""
+    figure_dr.x_range = figure_mdr.x_range;
+    """)
+    plot_metrics.x_range.js_on_change('start', mdr_fig_dr_move)
+    plot_metrics.x_range.js_on_change('end', mdr_fig_dr_move)
 
     str_update_mdr = """
     // Change the MDR section
@@ -397,7 +420,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
             styles={"padding": "0.5vw"}),
         row(
             column(
-                plot_metrics,
+                plot_metrics, plot_metrics_dr,
                 sizing_mode="stretch_both",
                 styles={"text-align": "center",
                         "font-size": FontSize.NORMAL,
