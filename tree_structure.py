@@ -10,7 +10,7 @@ class VariableTree:
         if min_sample_ratio == 0:
             min_sample_ratio = 1
         else:
-            min_sample_ratio = min_sample_ratio/100
+            min_sample_ratio = min_sample_ratio / 100
         self.dtr = DecisionTreeRegressor(max_depth=max_depth, min_samples_leaf=min_sample_ratio, random_state=54288)
         self.features = None
         self.nb_nodes = 0
@@ -21,6 +21,10 @@ class VariableTree:
 
         self.head = self.add_children(0, X, y)
 
+    def get_all_profiles(self, min_ca=0, min_samples_ratio=0):
+        profiles = self.head.get_profile(min_samples_ratio=min_samples_ratio, min_ca=min_ca, previous_thresh="*")
+        return profiles
+
     def predict(self, X, depth=None, min_samples_ratio=0):
         if depth is None and min_samples_ratio == 0:
             return self.dtr.predict(X)
@@ -28,6 +32,7 @@ class VariableTree:
         def node_predict(_depth, _min_samples_ratio):
             def _node_predict(X):
                 return self.head.predict(X, _depth, _min_samples_ratio)
+
             return _node_predict
 
         predictions = np.array(X.apply(node_predict(depth, min_samples_ratio), axis=1))
@@ -85,6 +90,27 @@ class _Node:
         self.feature_id = feature_id
         self.node_id = node_id
 
+    def get_profile(self, min_samples_ratio, min_ca, previous_thresh=""):
+        curr_profile_child = []
+        prev_thresh_separator = " / " if previous_thresh != "" else ""
+        if self.c_left is not None:
+            if self.c_left.samples_ratio >= min_samples_ratio:  # self.c_left.value >= min_ca and
+                left_prev_thresh = previous_thresh + f"{prev_thresh_separator}{self.feature}<=" \
+                                                     f"{round(self.threshold, 2)}"
+                curr_profile_child += self.c_left.get_profile(min_samples_ratio=min_samples_ratio,
+                                                              min_ca=min_ca, previous_thresh=left_prev_thresh)
+
+        if self.c_right is not None:
+            if self.c_right.samples_ratio >= min_samples_ratio:  # self.c_right.value >= min_ca and
+                right_prev_thresh = previous_thresh + f"{prev_thresh_separator}{self.feature}>" \
+                                                      f"{round(self.threshold, 2)}"
+                curr_profile_child += self.c_right.get_profile(min_samples_ratio=min_samples_ratio,
+                                                               min_ca=min_ca, previous_thresh=right_prev_thresh)
+        if self.value < min_ca and len(curr_profile_child) == 0:
+            return []
+
+        return [*curr_profile_child, previous_thresh]
+
     def predict(self, X, depth=None, min_samples_ratio=0):
         if depth == 0 or self.c_left is None:
             return self.value
@@ -112,7 +138,6 @@ class _Node:
 
 
 if __name__ == '__main__':
-
     y = np.array([1, 2, 3])
     x = DataFrame([[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=['a', 'b', 'c'])
     tree = VariableTree()

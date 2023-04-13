@@ -125,21 +125,46 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
         mdr_dict = {METRICS_DISPLAY[k]: [dic[k] for dic in mdr_values] for k in mdr_values[0]}
 
         # add DR with profile disappear threshold
-        unique_ca_profile_values = np.sort(np.unique(ca_profile_values))
-        dr_profile = [int(100 * len(min_values_sampratio[min_values_sampratio >= min_ca]) / len(ca_profile_values))
-                      for min_ca in unique_ca_profile_values]
+        unique_ca_profile_values = np.sort(np.unique(ca_profile_values)).tolist() + [1.01]  # 1.01 to get a DR = 0%
+
+        dr_profile = []
+        dr_lost_profiles = []
+        #prev_profiles = ca_profile.get_all_profiles(min_ca=0, min_samples_ratio=min_perc)
+        for min_ca_id in range(0, len(unique_ca_profile_values)-1):
+            min_ca_curr = unique_ca_profile_values[min_ca_id]
+            min_ca_next = unique_ca_profile_values[min_ca_id + 1]
+
+            profiles_curr = ca_profile.get_all_profiles(min_ca=min_ca_curr, min_samples_ratio=min_perc)
+            profiles_next = ca_profile.get_all_profiles(min_ca=min_ca_next, min_samples_ratio=min_perc)
+
+            if len(profiles_curr) != len(profiles_next):
+                lost_profiles = list(set(profiles_curr) - set(profiles_next))
+                dr_profile.append(int(100 * len(min_values_sampratio[min_values_sampratio >= min_ca_next]) /
+                                      len(ca_profile_values)))
+
+                dr_lost_profiles.append("<br>".join(lost_profiles))
+
+        # dr_profile = [int(100 * len(min_values_sampratio[min_values_sampratio >= min_ca]) / len(ca_profile_values))
+        #              for min_ca in unique_ca_profile_values]
         # dr_profile_y = [len(min_values_sampratio[min_values_sampratio >= min_ca]) / len(ca_profile_values)
         #                for min_ca in unique_ca_profile_values]
 
-        dr_profile_x = [dr if dr in dr_profile else np.nan for dr in mdr_dict[METRICS_DISPLAY[DR]]]  # 100 if dr == 100 else
+        dr_profile_x = [dr if dr in dr_profile else np.nan for dr in
+                        mdr_dict[METRICS_DISPLAY[DR]]]  # 100 if dr == 100 else
         dr_profile_y = [0 if dr in dr_profile else np.nan for dr in  # dr / 100
                         mdr_dict[METRICS_DISPLAY[DR]]]
+        dr_profile_lost = [dr_lost_profiles[dr_profile.index(dr)] if dr in dr_profile else np.nan for dr in  # dr / 100
+                           mdr_dict[METRICS_DISPLAY[DR]]]
 
         mdr_dict['dr_profile_x'] = dr_profile_x
         mdr_dict['dr_profile_y'] = dr_profile_y
         mdr_dict['dr_profile_y_line'] = [0] * len(mdr_dict[METRICS_DISPLAY[DR]])
+        mdr_dict['dr_profile_lost'] = dr_profile_lost
         # [0 for dr in mdr_dict[METRICS_DISPLAY[DR]]]  # dr / 100
-
+        #if min_perc == 0:
+        #    print(f"{unique_ca_profile_values=}")
+        #    print(100 * len(min_values_sampratio[min_values_sampratio >= unique_ca_profile_values[-2]]) /
+        #          len(ca_profile_values))
         # Save values
         mdr_sampratio_dict['samp_ratio'].append(min_perc)
         mdr_sampratio_dict['values'].append(mdr_dict)
@@ -161,6 +186,9 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                                     (SPECIFICITY, f'@{METRICS_DISPLAY[SPECIFICITY]}'),
                                     (AUC, f'@{METRICS_DISPLAY[AUC]}'),
                                     ])
+    profile_hover = HoverTool(tooltips=[('Declaration rate', '@dr_profile_x'),
+                                        ('Profiles', '@dr_profile_lost{safe}'),
+                                        ])
     mdr_tools = [PanTool(), WheelZoomTool(), SaveTool(), ResetTool(), mdr_hover]
 
     plot_metrics = figure(y_axis_label='Metrics score', sizing_mode='scale_width',
@@ -172,24 +200,23 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
         plot_metrics.circle(x=METRICS_DISPLAY[DR], y=metric_name, legend_label=metric_name,
                             line_width=2, color=color, source=mdr_current_data)
 
-    #plot_metrics.line(x=METRICS_DISPLAY[DR], y='dr_profile_y_line', legend_label='Declaration Rate', color='black',
+    # plot_metrics.line(x=METRICS_DISPLAY[DR], y='dr_profile_y_line', legend_label='Declaration Rate', color='black',
     #                  line_width=1, source=mdr_current_data)
-    #plot_metrics.triangle_dot(x='dr_profile_x', y='dr_profile_y', legend_label='Declaration Rate', color='black',
+    # plot_metrics.triangle_dot(x='dr_profile_x', y='dr_profile_y', legend_label='Declaration Rate', color='black',
     #                          line_width=3, source=mdr_current_data)
 
     plot_metrics_dr = figure(x_axis_label='Declaration Rate', sizing_mode='scale_width',  # height="2vh",
-                             y_range=(-0.1, 0.9), tools="", stylesheets=[":host {height: 25vh;}"])
+                             y_range=(-0.1, 0.9), tools=[profile_hover], stylesheets=[":host {height: 25vh;}"])
 
-    plot_metrics_dr.line(x=METRICS_DISPLAY[DR], y='dr_profile_y_line', legend_label='Declaration Rate', color='black',
-                      line_width=1, source=mdr_current_data)
+    #plot_metrics_dr.line(x='dr_profile_x', y='dr_profile_y_line', legend_label='Declaration Rate', color='black',
+    #                     line_width=1, source=mdr_current_data)
     plot_metrics_dr.triangle_dot(x='dr_profile_x', y='dr_profile_y', legend_label='Declaration Rate', color='black',
-                              line_width=3, source=mdr_current_data)
+                                 line_width=3, source=mdr_current_data)
     plot_metrics_dr.axis.axis_label_text_font_style = 'bold'
     plot_metrics_dr.legend.click_policy = "hide"
     plot_metrics_dr.right = plot_metrics_dr.legend
     plot_metrics_dr.yaxis.visible = False
     plot_metrics_dr.ygrid.visible = False
-
 
     # Setup legend
     plot_metrics.legend.click_policy = "hide"
@@ -237,11 +264,11 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
             id_min_dr = -1
             id_min_val = -1
             for dr_id, dr_val in enumerate(dr_array):
-                if (dr_val <= slider_dr.value/100) and (dr_val > id_min_val):
+                if (dr_val <= slider_dr.value / 100) and (dr_val > id_min_val):
                     id_min_val = dr_val
                     id_min_dr = dr_id
 
-            #id_min_dr = dr_array[dr_array <= slider_dr.value / 100].argmax() if \
+            # id_min_dr = dr_array[dr_array <= slider_dr.value / 100].argmax() if \
             #    len(dr_array[dr_array <= slider_dr.value / 100]) > 0 else -1
 
             if id_min_dr == -1:
