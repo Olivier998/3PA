@@ -154,7 +154,6 @@ class MDR:
                     prev_min_acc = curr_min_acc
                     self.dr[samp_ratio][dr] = curr_min_acc
 
-
         #self.dr = {samp_ratio: {dr: np.sort(pred_cas[samp_ratio])[int(len(pred_cas[samp_ratio]) * (1-dr/100))] for
         #                        dr in range(100, 0, -1)} for samp_ratio in pred_cas}
         self.precision = precision

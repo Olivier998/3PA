@@ -26,8 +26,8 @@ class VariableTree:
         return profiles
 
     def predict(self, X, depth=None, min_samples_ratio=0):
-        if depth is None and min_samples_ratio == 0:
-            return self.dtr.predict(X)
+        #if depth is None and min_samples_ratio == 0:
+        #    return self.dtr.predict(X)
 
         def node_predict(_depth, _min_samples_ratio):
             def _node_predict(X):
@@ -50,7 +50,8 @@ class VariableTree:
 
         # If we are at a leaf
         if left_child == -1:
-            curr_node = _Node(value=node_value, samples_ratio=node_samples_ratio, node_id=self.nb_nodes)
+            curr_node = _Node(value=node_value, samples_ratio=node_samples_ratio,
+                              node_id=self.nb_nodes)
             return curr_node
 
         node_thresh = self.dtr.tree_.threshold[node_id]
@@ -93,8 +94,10 @@ class _Node:
     def get_profile(self, min_samples_ratio, min_ca, previous_thresh=""):
         curr_profile_child = []
         prev_thresh_separator = " / " if previous_thresh != "" else ""
+        temp=0
         if self.c_left is not None:
             if self.c_left.samples_ratio >= min_samples_ratio:  # self.c_left.value >= min_ca and
+                temp+=1
                 left_prev_thresh = previous_thresh + f"{prev_thresh_separator}{self.feature}<=" \
                                                      f"{round(self.threshold, 2)}"
                 curr_profile_child += self.c_left.get_profile(min_samples_ratio=min_samples_ratio,
@@ -102,12 +105,15 @@ class _Node:
 
         if self.c_right is not None:
             if self.c_right.samples_ratio >= min_samples_ratio:  # self.c_right.value >= min_ca and
+                temp+=1
                 right_prev_thresh = previous_thresh + f"{prev_thresh_separator}{self.feature}>" \
                                                       f"{round(self.threshold, 2)}"
                 curr_profile_child += self.c_right.get_profile(min_samples_ratio=min_samples_ratio,
                                                                min_ca=min_ca, previous_thresh=right_prev_thresh)
+
         if self.value < min_ca and len(curr_profile_child) == 0:
             return []
+
 
         return [*curr_profile_child, previous_thresh]
 

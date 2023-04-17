@@ -1,5 +1,6 @@
 from bokeh.layouts import row, column, layout
-from bokeh.models import Div, Slider, LabelSet, ColumnDataSource, HoverTool, WheelZoomTool, ResetTool, SaveTool, PanTool
+from bokeh.models import Div, Slider, LabelSet, ColumnDataSource, HoverTool, WheelZoomTool, ResetTool, SaveTool, \
+    PanTool, Button
 from bokeh.plotting import figure
 from bokeh.models.callbacks import CustomJS
 
@@ -47,6 +48,8 @@ METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPEC
 
 
 def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
+    if filename is None or filename == "":
+        filename = 'newtest01'
     curr_time = int(time.time())
     print('Starting MDR process')
     # Tool header
@@ -71,6 +74,10 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                              sizing_mode="stretch_width",
                              styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
                                      "width": "75%", "align-self": "center"})
+    bttn_save_profiles = Button(label='Save Profiles',
+                                align='center',
+                                #styles={'width': '15vw', 'height': '3vw'},
+                                stylesheets=[".bk-btn-default {font-size: 1vw; font-weight: bold;}"])
 
     # Section to train misclassification model
     y_pred = np.array([1 if y_score_i >= THRESHOLD else 0 for y_score_i in predicted_prob])
@@ -119,6 +126,14 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                                          zip(ca_rf_values, ca_profile_values)])
         min_cas[min_perc] = min_values_sampratio
 
+        #temp
+        if min_perc==0:
+            temp = x.copy()
+            temp['carf'] = ca_rf_values
+            temp['cadt'] = ca_profile_values
+            temp['min'] = min_values_sampratio
+            #temp.to_csv('test.csv')
+
         # Get mdr values for every samples ratio
         mdr_values = get_mdr(y, y_pred, predicted_prob, min_values_sampratio)
         # from list of dicts to dict of lists
@@ -129,26 +144,60 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
 
         dr_profile = []
         dr_lost_profiles = []
-        #prev_profiles = ca_profile.get_all_profiles(min_ca=0, min_samples_ratio=min_perc)
-        for min_ca_id in range(0, len(unique_ca_profile_values)-1):
+        prev_profiles = ca_profile.get_all_profiles(min_ca=0, min_samples_ratio=min_perc)
+        sorted_accuracies = np.sort(min_values_sampratio)
+
+        dr_range = []
+        prev_min_acc = -1
+        for dr in range(100, 0, -1):
+            curr_min_acc = sorted_accuracies[int(len(sorted_accuracies) * (1 - dr/100))]
+            if prev_min_acc < curr_min_acc:
+                prev_min_acc = curr_min_acc
+                dr_range.append([dr, curr_min_acc])
+        dr_range.append([0, 1.01])
+
+        profiles_curr = ca_profile.get_all_profiles(min_ca=dr_range[0][1], min_samples_ratio=min_perc)
+
+        for id in range(len(dr_range)-1):
+            dr, min_ca_curr = dr_range[id]
+            _, min_ca_next = dr_range[id+1]
+            #min_ca_curr = sorted_accuracies[int(len(sorted_accuracies) * (1 - dr/100))]
+            #min_ca_next = sorted_accuracies[int(len(sorted_accuracies) * (1 - (dr-1)/100))]
+
+            profiles_next = ca_profile.get_all_profiles(min_ca=min_ca_next, min_samples_ratio=min_perc)
+            # print(f"{min_ca_curr} {min_ca_next} {len(profiles_curr)}  {len(profiles_next)} {dr}  {len(min_values_sampratio[min_values_sampratio >= min_ca_curr]) /len(ca_profile_values)}\n")
+            if len(profiles_curr) != len(profiles_next):
+                lost_profiles = list(set(profiles_curr) - set(profiles_next))
+                # print(f"{lost_profiles=}")
+                dr_profile.append(int(100 * len(min_values_sampratio[min_values_sampratio >= min_ca_curr]) /
+                                      len(ca_profile_values)))
+
+                dr_lost_profiles.append("<br>".join(lost_profiles))
+            profiles_curr = profiles_next
+        #if min_perc==0:
+        #    print(f"{unique_ca_profile_values[len(unique_ca_profile_values)-2]}  "
+        #          f"{unique_ca_profile_values[len(unique_ca_profile_values)-1]}")
+        """for min_ca_id in range(0, len(unique_ca_profile_values)-1):
             min_ca_curr = unique_ca_profile_values[min_ca_id]
             min_ca_next = unique_ca_profile_values[min_ca_id + 1]
 
             profiles_curr = ca_profile.get_all_profiles(min_ca=min_ca_curr, min_samples_ratio=min_perc)
             profiles_next = ca_profile.get_all_profiles(min_ca=min_ca_next, min_samples_ratio=min_perc)
 
+            print(f"{min_ca_id=} {min_ca_curr} {min_ca_next} {len(profiles_curr)}  {len(profiles_next)}  {len(min_values_sampratio[min_values_sampratio >= min_ca_curr]) /len(ca_profile_values)}")
+
             if len(profiles_curr) != len(profiles_next):
                 lost_profiles = list(set(profiles_curr) - set(profiles_next))
-                dr_profile.append(int(100 * len(min_values_sampratio[min_values_sampratio >= min_ca_next]) /
+                dr_profile.append(int(100 * len(min_values_sampratio[min_values_sampratio >= min_ca_curr]) /
                                       len(ca_profile_values)))
 
                 dr_lost_profiles.append("<br>".join(lost_profiles))
-
+        """
         # dr_profile = [int(100 * len(min_values_sampratio[min_values_sampratio >= min_ca]) / len(ca_profile_values))
         #              for min_ca in unique_ca_profile_values]
         # dr_profile_y = [len(min_values_sampratio[min_values_sampratio >= min_ca]) / len(ca_profile_values)
         #                for min_ca in unique_ca_profile_values]
-
+        # print(f"{dr_profile=}")
         dr_profile_x = [dr if dr in dr_profile else np.nan for dr in
                         mdr_dict[METRICS_DISPLAY[DR]]]  # 100 if dr == 100 else
         dr_profile_y = [0 if dr in dr_profile else np.nan for dr in  # dr / 100
@@ -206,7 +255,9 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     #                          line_width=3, source=mdr_current_data)
 
     plot_metrics_dr = figure(x_axis_label='Declaration Rate', sizing_mode='scale_width',  # height="2vh",
-                             y_range=(-0.1, 0.9), tools=[profile_hover], stylesheets=[":host {height: 25vh;}"])
+                             y_range=(-0.1, 0.9),
+                             tools=[profile_hover],
+                             stylesheets=[":host {height: 25vh;}"])
 
     #plot_metrics_dr.line(x='dr_profile_x', y='dr_profile_y_line', legend_label='Declaration Rate', color='black',
     #                     line_width=1, source=mdr_current_data)
@@ -433,6 +484,37 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     slider_dr.js_on_change('value', callback_dr)
     slider_maxdepth.js_on_change('value', callback_samp_ratio)
 
+    bttn_save_profiles.js_on_click(CustomJS(args=dict(curr=mdr_current_data, slider_samp_ratio=slider_minleaf,
+                                                      filename=filename+'_profiles'),
+                                            code="""
+    var csv_data = "DR,Profiles\\n";
+            
+            for (var i=0; i< curr.data['dr_profile_lost'].length; i++)
+            {
+                if (typeof curr.data['dr_profile_lost'][i] == 'string')
+                {
+                    csv_data += curr.data['dr_profile_x'][i] + ',' +
+                                curr.data['dr_profile_lost'][i].replaceAll('<br>', ', ') + '\\n';
+                }
+            }         
+            
+            const blob = new Blob([csv_data], { type: 'text/csv;charset=utf-8;' })
+            filename += '_' + slider_samp_ratio.value + '.csv';
+
+            //addresses IE
+            if (navigator.msSaveBlob) {
+                navigator.msSaveBlob(blob, filename)
+            } else {
+                const link = document.createElement('a')
+                link.href = URL.createObjectURL(blob)
+                link.download = filename
+                link.target = '_blank'
+                link.style.visibility = 'hidden'
+                link.dispatchEvent(new MouseEvent('click'))
+            }
+    """))
+
+
     # We set the two box (extracted profiles and MDR curves)
     outline_boxs = row(
         row(
@@ -464,7 +546,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
         tool_header,
         row(slider_dr,
             slider_maxdepth,
-            slider_minleaf, sizing_mode="stretch_width"),
+            slider_minleaf,
+            bttn_save_profiles, sizing_mode="stretch_width"),
         [outline_boxs],
     ],
         sizing_mode="stretch_both")
@@ -473,8 +556,6 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     curr_doc = curdoc()  # Document()
     curr_doc.add_root(layout_output)  # (row(inputs, plot, width=1200))
 
-    if filename is None or filename == "":
-        filename = 'newtest01'
     html = file_html(layout_output, CDN, title=filename)
 
     path = os.path.abspath(filename + '.html')
@@ -493,4 +574,9 @@ if __name__ == '__main__':
                      columns=['a', 'b', 'c'])  # [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     y = np.array([1, 1, 0, 0])
     y_pred = np.array([0.98, 0.45, 0.35, 0.02])
+
+    #df = pd.read_csv('simulated_data.csv')
+    #x=df[['x1', 'x2']]
+    #y=df['y_true'].to_numpy()
+    #y_pred=df['pred_prob'].to_numpy()
     generate_mdr(x, y, y_pred)
