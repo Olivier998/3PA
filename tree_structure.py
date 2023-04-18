@@ -22,11 +22,12 @@ class VariableTree:
         self.head = self.add_children(0, X, y)
 
     def get_all_profiles(self, min_ca=0, min_samples_ratio=0):
-        profiles = self.head.get_profile(min_samples_ratio=min_samples_ratio, min_ca=min_ca, previous_thresh="*")
-        return profiles
+        profiles, nodes_numbers = self.head.get_profile(min_samples_ratio=min_samples_ratio, min_ca=min_ca,
+                                                        previous_thresh="*")
+        return profiles, nodes_numbers
 
     def predict(self, X, depth=None, min_samples_ratio=0):
-        #if depth is None and min_samples_ratio == 0:
+        # if depth is None and min_samples_ratio == 0:
         #    return self.dtr.predict(X)
 
         def node_predict(_depth, _min_samples_ratio):
@@ -93,36 +94,40 @@ class _Node:
 
     def get_profile(self, min_samples_ratio, min_ca, previous_thresh=""):
         curr_profile_child = []
+        curr_child_nodeid = []
         prev_thresh_separator = " / " if previous_thresh != "" else ""
-        temp=0
+        temp = 0
         if self.c_left is not None:
             if self.c_left.samples_ratio >= min_samples_ratio:  # self.c_left.value >= min_ca and
-                temp+=1
+                temp += 1
                 left_prev_thresh = previous_thresh + f"{prev_thresh_separator}{self.feature}<=" \
                                                      f"{round(self.threshold, 2)}"
-                curr_profile_child += self.c_left.get_profile(min_samples_ratio=min_samples_ratio,
-                                                              min_ca=min_ca, previous_thresh=left_prev_thresh)
+                c_prev_str, c_prev_id = self.c_left.get_profile(min_samples_ratio=min_samples_ratio,
+                                                                min_ca=min_ca, previous_thresh=left_prev_thresh)
+                curr_profile_child += c_prev_str
+                curr_child_nodeid += c_prev_id
 
         if self.c_right is not None:
             if self.c_right.samples_ratio >= min_samples_ratio:  # self.c_right.value >= min_ca and
-                temp+=1
+                temp += 1
                 right_prev_thresh = previous_thresh + f"{prev_thresh_separator}{self.feature}>" \
                                                       f"{round(self.threshold, 2)}"
-                curr_profile_child += self.c_right.get_profile(min_samples_ratio=min_samples_ratio,
+                c_prev_str, c_prev_id = self.c_right.get_profile(min_samples_ratio=min_samples_ratio,
                                                                min_ca=min_ca, previous_thresh=right_prev_thresh)
+                curr_profile_child += c_prev_str
+                curr_child_nodeid += c_prev_id
 
         if self.value < min_ca and len(curr_profile_child) == 0:
-            return []
+            return [], []
 
-
-        return [*curr_profile_child, previous_thresh]
+        return [*curr_profile_child, previous_thresh], [*curr_child_nodeid, self.node_id]
 
     def predict(self, X, depth=None, min_samples_ratio=0):
         if depth == 0 or self.c_left is None:
             return self.value
 
         if type(X) == DataFrame:
-            X_value = X[self.feature]  # .iloc[self.feature_id]
+            X_value = X[self.feature]
         elif type(X) == Series:
             X_value = X[self.feature_id]
         else:

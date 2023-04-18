@@ -1,6 +1,6 @@
 from bokeh.layouts import row, column, layout
 from bokeh.models import Div, Slider, LabelSet, ColumnDataSource, HoverTool, WheelZoomTool, ResetTool, SaveTool, \
-    PanTool, Button
+    PanTool, Button, TapTool
 from bokeh.plotting import figure
 from bokeh.models.callbacks import CustomJS
 
@@ -139,12 +139,9 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
         # from list of dicts to dict of lists
         mdr_dict = {METRICS_DISPLAY[k]: [dic[k] for dic in mdr_values] for k in mdr_values[0]}
 
-        # add DR with profile disappear threshold
-        unique_ca_profile_values = np.sort(np.unique(ca_profile_values)).tolist() + [1.01]  # 1.01 to get a DR = 0%
-
         dr_profile = []
         dr_lost_profiles = []
-        prev_profiles = ca_profile.get_all_profiles(min_ca=0, min_samples_ratio=min_perc)
+        dr_lost_profiles_id = []
         sorted_accuracies = np.sort(min_values_sampratio)
 
         dr_range = []
@@ -156,24 +153,26 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                 dr_range.append([dr, curr_min_acc])
         dr_range.append([0, 1.01])
 
-        profiles_curr = ca_profile.get_all_profiles(min_ca=dr_range[0][1], min_samples_ratio=min_perc)
+        profiles_curr, profiles_curr_id = ca_profile.get_all_profiles(min_ca=dr_range[0][1], min_samples_ratio=min_perc)
 
         for id in range(len(dr_range)-1):
             dr, min_ca_curr = dr_range[id]
             _, min_ca_next = dr_range[id+1]
-            #min_ca_curr = sorted_accuracies[int(len(sorted_accuracies) * (1 - dr/100))]
-            #min_ca_next = sorted_accuracies[int(len(sorted_accuracies) * (1 - (dr-1)/100))]
 
-            profiles_next = ca_profile.get_all_profiles(min_ca=min_ca_next, min_samples_ratio=min_perc)
+            profiles_next, profiles_next_id = ca_profile.get_all_profiles(min_ca=min_ca_next,
+                                                                          min_samples_ratio=min_perc)
             # print(f"{min_ca_curr} {min_ca_next} {len(profiles_curr)}  {len(profiles_next)} {dr}  {len(min_values_sampratio[min_values_sampratio >= min_ca_curr]) /len(ca_profile_values)}\n")
             if len(profiles_curr) != len(profiles_next):
                 lost_profiles = list(set(profiles_curr) - set(profiles_next))
+                lost_profiles_id = list(set(profiles_curr_id) - set(profiles_next_id))
                 # print(f"{lost_profiles=}")
                 dr_profile.append(int(100 * len(min_values_sampratio[min_values_sampratio >= min_ca_curr]) /
                                       len(ca_profile_values)))
 
                 dr_lost_profiles.append("<br>".join(lost_profiles))
+                dr_lost_profiles_id.append((lost_profiles_id))
             profiles_curr = profiles_next
+            profiles_curr_id = profiles_next_id
         #if min_perc==0:
         #    print(f"{unique_ca_profile_values[len(unique_ca_profile_values)-2]}  "
         #          f"{unique_ca_profile_values[len(unique_ca_profile_values)-1]}")
@@ -204,11 +203,14 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                         mdr_dict[METRICS_DISPLAY[DR]]]
         dr_profile_lost = [dr_lost_profiles[dr_profile.index(dr)] if dr in dr_profile else np.nan for dr in  # dr / 100
                            mdr_dict[METRICS_DISPLAY[DR]]]
+        dr_profile_lost_id = [dr_lost_profiles_id[dr_profile.index(dr)] if dr in dr_profile else np.nan for dr in
+                              mdr_dict[METRICS_DISPLAY[DR]]]
 
         mdr_dict['dr_profile_x'] = dr_profile_x
         mdr_dict['dr_profile_y'] = dr_profile_y
         mdr_dict['dr_profile_y_line'] = [0] * len(mdr_dict[METRICS_DISPLAY[DR]])
         mdr_dict['dr_profile_lost'] = dr_profile_lost
+        mdr_dict['dr_profile_lost_id'] = dr_profile_lost_id
         # [0 for dr in mdr_dict[METRICS_DISPLAY[DR]]]  # dr / 100
         #if min_perc == 0:
         #    print(f"{unique_ca_profile_values=}")
@@ -238,6 +240,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     profile_hover = HoverTool(tooltips=[('Declaration rate', '@dr_profile_x'),
                                         ('Profiles', '@dr_profile_lost{safe}'),
                                         ])
+
+    profile_tap = TapTool(behavior='select')
     mdr_tools = [PanTool(), WheelZoomTool(), SaveTool(), ResetTool(), mdr_hover]
 
     plot_metrics = figure(y_axis_label='Metrics score', sizing_mode='scale_width',
@@ -256,7 +260,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
 
     plot_metrics_dr = figure(x_axis_label='Declaration Rate', sizing_mode='scale_width',  # height="2vh",
                              y_range=(-0.1, 0.9),
-                             tools=[profile_hover],
+                             tools=[profile_hover, profile_tap],
                              stylesheets=[":host {height: 25vh;}"])
 
     #plot_metrics_dr.line(x='dr_profile_x', y='dr_profile_y_line', legend_label='Declaration Rate', color='black',
@@ -265,12 +269,14 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                                  line_width=3, source=mdr_current_data)
     plot_metrics_dr.axis.axis_label_text_font_style = 'bold'
     plot_metrics_dr.legend.click_policy = "hide"
+    plot_metrics_dr.legend.label_text_font_size = '0.75vw'
     plot_metrics_dr.right = plot_metrics_dr.legend
     plot_metrics_dr.yaxis.visible = False
     plot_metrics_dr.ygrid.visible = False
 
     # Setup legend
     plot_metrics.legend.click_policy = "hide"
+    plot_metrics.legend.label_text_font_size = '0.75vw'
     plot_metrics.right = plot_metrics.legend
 
     print(f"PLOT MDR: {int(time.time() - curr_time)}s")
@@ -479,10 +485,34 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                                              metrics_display=METRICS_DISPLAY),
                                    code=str_update_profile + str_update_mdr)
 
+    profile_tap_action = CustomJS(args=dict(curr=mdr_current_data, nodes=nodes),
+                                  code="""
+            var indices = curr.selected.indices;
+            var lost_nodes = curr.data['dr_profile_lost_id'][indices];
+            
+            if (lost_nodes == undefined)  // So we can use .includes
+            {
+                lost_nodes = []
+            }
+            
+            for (var i=0; i< nodes.length; i++)
+            {
+                if (lost_nodes.includes(nodes[i].tags[0]['node_id']))
+                {
+                    nodes[i].line_color = 'yellow'
+                }
+                else 
+                {
+                    nodes[i].line_color = 'black'
+                }
+            }
+                                  """)
+
     # set callback actions
     slider_minleaf.js_on_change('value', callback_samp_ratio)
     slider_dr.js_on_change('value', callback_dr)
     slider_maxdepth.js_on_change('value', callback_samp_ratio)
+    mdr_current_data.selected.js_on_change('indices', profile_tap_action)
 
     bttn_save_profiles.js_on_click(CustomJS(args=dict(curr=mdr_current_data, slider_samp_ratio=slider_minleaf,
                                                       filename=filename+'_profiles'),
