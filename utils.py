@@ -1,6 +1,6 @@
 import inspect
 import numpy as np
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, recall_score, roc_auc_score
+from sklearn.metrics import accuracy_score, recall_score, roc_auc_score, average_precision_score, matthews_corrcoef
 
 
 def filter_dict(func, **kwarg_dict):
@@ -19,6 +19,7 @@ def filter_dict(func, **kwarg_dict):
     filtered_dict = {key: kwarg_dict[key] for key in common_args}
 
     return filtered_dict
+
 
 """
 def get_mdr(Y_target, Y_predicted, predicted_accuracies):
@@ -58,7 +59,8 @@ def get_mdr(Y_target, Y_predicted, predicted_prob, predicted_accuracies):
     prev_dr_accuracy = -1
 
     for dr in range(100, 0, -1):
-        dr_accuracy = sorted_accuracies[int(len(sorted_accuracies) * (1 - dr/100))]  # np.percentile(predicted_accuracies, 100 - dr, interpolation="lower")
+        dr_accuracy = sorted_accuracies[int(len(sorted_accuracies) * (
+                    1 - dr / 100))]  # np.percentile(predicted_accuracies, 100 - dr, interpolation="lower")
 
         if dr_accuracy != prev_dr_accuracy:
             prev_dr_accuracy = dr_accuracy
@@ -68,7 +70,13 @@ def get_mdr(Y_target, Y_predicted, predicted_prob, predicted_accuracies):
             perc_node = sum(predicted_accuracies >= dr_accuracy) / len(Y_target)
             acc = accuracy_score(Y_target[predicted_accuracies >= dr_accuracy],
                                  Y_predicted[predicted_accuracies >= dr_accuracy])
-            #bal_acc = balanced_accuracy_score(Y_target[predicted_accuracies > dr_accuracy],
+            auprc = average_precision_score(Y_target[predicted_accuracies >= dr_accuracy],
+                                            predicted_prob[predicted_accuracies >= dr_accuracy]) if \
+                len(np.unique(Y_target[predicted_accuracies >= dr_accuracy])) > 1 else 0
+            mcc = matthews_corrcoef(Y_target[predicted_accuracies >= dr_accuracy],
+                                    Y_predicted[predicted_accuracies >= dr_accuracy]) if \
+                len(np.unique(Y_target[predicted_accuracies >= dr_accuracy])) > 1 else 0
+            # bal_acc = balanced_accuracy_score(Y_target[predicted_accuracies > dr_accuracy],
             #                                  Y_predicted[predicted_accuracies > dr_accuracy])
             sensitivity = recall_score(Y_target[predicted_accuracies >= dr_accuracy],
                                        Y_predicted[predicted_accuracies >= dr_accuracy]
@@ -78,7 +86,7 @@ def get_mdr(Y_target, Y_predicted, predicted_prob, predicted_accuracies):
                                        , pos_label=0, zero_division=0)
             bal_acc = (sensitivity + specificity) / 2
             mdr_values.append({'dr': dr, 'accuracy': acc, 'bal_acc': bal_acc, 'perc_node': perc_node,
-                               'sens': sensitivity, 'spec': specificity, 'auc': auc})
+                               'sens': sensitivity, 'spec': specificity, 'auc': auc, 'auprc': auprc, 'mcc': mcc})
 
     mdr_values = np.array(mdr_values)
 

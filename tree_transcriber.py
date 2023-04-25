@@ -1,11 +1,12 @@
 from bokeh.models import Rect, Arrow
 from tree_structure import VariableTree, _Node
 import numpy as np
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, recall_score, roc_auc_score
+from sklearn.metrics import accuracy_score, recall_score, roc_auc_score, average_precision_score, matthews_corrcoef
 from layout_parameters import ITALIC_VARS
 
 # Remove scikit warnings
 import warnings
+
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
@@ -139,8 +140,8 @@ class TreeTranscriber:
 class MDR:
     def __init__(self, pred_cas, precision=2):
         self.n_total = {samp_ratio: len(pred_cas[samp_ratio]) for samp_ratio in pred_cas}
-        #unique_accuracies = {samp_ratio: np.sort(np.unique(pred_cas[samp_ratio]))[::-1] for samp_ratio in pred_cas}
-        #self.dr = {samp_ratio: {min_perc: sum(pred_cas[samp_ratio] >= min_perc) / self.n_total[samp_ratio]
+        # unique_accuracies = {samp_ratio: np.sort(np.unique(pred_cas[samp_ratio]))[::-1] for samp_ratio in pred_cas}
+        # self.dr = {samp_ratio: {min_perc: sum(pred_cas[samp_ratio] >= min_perc) / self.n_total[samp_ratio]
         #                        for min_perc in unique_accuracies[samp_ratio]} for samp_ratio in pred_cas}
 
         # Get DR only if min_ca is different
@@ -149,12 +150,12 @@ class MDR:
             self.dr[samp_ratio] = {}
             prev_min_acc = -1
             for dr in range(100, 0, -1):
-                curr_min_acc = np.sort(pred_cas[samp_ratio])[int(len(pred_cas[samp_ratio]) * (1-dr/100))]
+                curr_min_acc = np.sort(pred_cas[samp_ratio])[int(len(pred_cas[samp_ratio]) * (1 - dr / 100))]
                 if prev_min_acc < curr_min_acc:
                     prev_min_acc = curr_min_acc
                     self.dr[samp_ratio][dr] = curr_min_acc
 
-        #self.dr = {samp_ratio: {dr: np.sort(pred_cas[samp_ratio])[int(len(pred_cas[samp_ratio]) * (1-dr/100))] for
+        # self.dr = {samp_ratio: {dr: np.sort(pred_cas[samp_ratio])[int(len(pred_cas[samp_ratio]) * (1-dr/100))] for
         #                        dr in range(100, 0, -1)} for samp_ratio in pred_cas}
         self.precision = precision
 
@@ -164,7 +165,7 @@ class MDR:
         mdr_values = []
 
         for dr, dr_accuracy in self.dr[samp_ratio].items():
-            #dr_accuracy = self.dr[samp_ratio][dr]  # np.percentile(pred_cas, 100 - dr, interpolation="lower")
+            # dr_accuracy = self.dr[samp_ratio][dr]  # np.percentile(pred_cas, 100 - dr, interpolation="lower")
             if sum(pred_cas >= dr_accuracy) > 0:
                 perc_node = sum(pred_cas >= dr_accuracy) * 100 / len(Y_target)
                 perc_pop = sum(pred_cas >= dr_accuracy) * 100 / self.n_total[samp_ratio]
@@ -173,7 +174,14 @@ class MDR:
                 auc = roc_auc_score(Y_target[pred_cas >= dr_accuracy],
                                     Y_prob[pred_cas >= dr_accuracy]) * 100 if \
                     len(np.unique(Y_target[pred_cas >= dr_accuracy])) > 1 else 0
-                #bal_acc = balanced_accuracy_score(Y_target[pred_cas > dr_accuracy],
+                auprc = average_precision_score(Y_target[pred_cas >= dr_accuracy],
+                                                Y_prob[pred_cas >= dr_accuracy]) * 100 if \
+                    len(np.unique(Y_target[pred_cas >= dr_accuracy])) > 1 else 0
+                mcc = matthews_corrcoef(Y_target[pred_cas >= dr_accuracy],
+                                        Y_predicted[pred_cas >= dr_accuracy]) * 100 if \
+                    len(np.unique(Y_target[pred_cas >= dr_accuracy])) > 1 else 0
+
+                # bal_acc = balanced_accuracy_score(Y_target[pred_cas > dr_accuracy],
                 #                                  Y_predicted[pred_cas > dr_accuracy])
                 sensitivity = recall_score(Y_target[pred_cas >= dr_accuracy],
                                            Y_predicted[pred_cas >= dr_accuracy]
@@ -187,14 +195,13 @@ class MDR:
                     else np.NaN
                 pos_class_occurence = np.sum(Y_target[pred_cas >= dr_accuracy]) / \
                                       len(Y_target[pred_cas >= dr_accuracy]) * 100
-                mdr_values.append({'dr': dr/100, 'accuracy': acc, 'bal_acc': bal_acc,
+                mdr_values.append({'dr': dr / 100, 'accuracy': acc, 'bal_acc': bal_acc,
                                    'sens': sensitivity, 'spec': specificity, 'perc_node': perc_node,
-                                   'perc_pop': perc_pop, 'auc': auc, 'mean_ca': mean_ca,
-                                   'pos_perc': pos_class_occurence})
+                                   'perc_pop': perc_pop, 'auc': auc, 'auprc': auprc, 'mean_ca': mean_ca,
+                                   'pos_perc': pos_class_occurence, 'mcc': mcc})
 
         for i, values in enumerate(mdr_values):
             for metric in values:
                 mdr_values[i][metric] = round(values[metric], self.precision)
         mdr_values = np.array(mdr_values)
-
         return mdr_values
