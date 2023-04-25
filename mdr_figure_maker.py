@@ -34,19 +34,21 @@ ACC = 'accuracy'
 BAL_ACC = 'bal_acc'
 MCC = 'mcc'
 MEAN_CA = 'mean_ca'
+NPV = 'npv'
 PERC_POP = 'perc_pop'
 PERC_NODE = 'perc_node'
 PERC_POS = 'pos_perc'
+PPV = 'ppv'
 SENSITIVITY = 'sens'
 SPECIFICITY = 'spec'
 DR = 'dr'
 
 METRICS_DISPLAY = {PERC_POS: '% positive', AUC: 'Auc', AUPRC: 'Auprc', BAL_ACC: 'Bal_Acc', MEAN_CA: 'Mean CA',
                    PERC_POP: '% pop', PERC_NODE: '% node', SENSITIVITY: 'sens',
-                   SPECIFICITY: 'spec', DR: 'DR', ACC: 'Acc', MCC: 'Mcc'}
+                   SPECIFICITY: 'spec', DR: 'DR', ACC: 'Acc', MCC: 'Mcc', PPV: 'PPV', NPV: 'NPV'}
 
 METRICS = [PERC_POS, BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, MEAN_CA, PERC_POP, PERC_NODE]
-METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, AUPRC, MCC]]
+METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, AUPRC, MCC, PPV, NPV]]
 
 
 def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
@@ -240,6 +242,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                                     (AUC, f'@{METRICS_DISPLAY[AUC]}'),
                                     (AUPRC, f'@{METRICS_DISPLAY[AUPRC]}'),
                                     (MCC, f'@{METRICS_DISPLAY[MCC]}'),
+                                    (PPV, f'@{METRICS_DISPLAY[PPV]}'),
+                                    (NPV, f'@{METRICS_DISPLAY[NPV]}'),
                                     ])
     profile_hover = HoverTool(tooltips=[('Declaration rate', '@dr_profile_x'),
                                         ('Profiles', '@dr_profile_lost{safe}'),

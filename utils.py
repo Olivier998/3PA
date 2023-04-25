@@ -1,6 +1,7 @@
 import inspect
 import numpy as np
-from sklearn.metrics import accuracy_score, recall_score, roc_auc_score, average_precision_score, matthews_corrcoef
+from sklearn.metrics import accuracy_score, recall_score, roc_auc_score, average_precision_score, matthews_corrcoef, \
+    precision_score
 
 
 def filter_dict(func, **kwarg_dict):
@@ -84,9 +85,16 @@ def get_mdr(Y_target, Y_predicted, predicted_prob, predicted_accuracies):
             specificity = recall_score(Y_target[predicted_accuracies >= dr_accuracy],
                                        Y_predicted[predicted_accuracies >= dr_accuracy]
                                        , pos_label=0, zero_division=0)
+            ppv = precision_score(Y_target[predicted_accuracies >= dr_accuracy],
+                                  Y_predicted[predicted_accuracies >= dr_accuracy]
+                                  , pos_label=1, zero_division=0)
+            npv = precision_score(Y_target[predicted_accuracies >= dr_accuracy],
+                                  Y_predicted[predicted_accuracies >= dr_accuracy]
+                                  , pos_label=0, zero_division=0)
             bal_acc = (sensitivity + specificity) / 2
             mdr_values.append({'dr': dr, 'accuracy': acc, 'bal_acc': bal_acc, 'perc_node': perc_node,
-                               'sens': sensitivity, 'spec': specificity, 'auc': auc, 'auprc': auprc, 'mcc': mcc})
+                               'sens': sensitivity, 'spec': specificity, 'auc': auc, 'auprc': auprc, 'mcc': mcc,
+                               'ppv': ppv, 'npv': npv})
 
     mdr_values = np.array(mdr_values)
 
