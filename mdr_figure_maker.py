@@ -598,7 +598,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
 
     path = os.path.abspath(filename + '.html')
     if not os.path.exists(path):
-        os.makedirs(path)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w') as file:
         file.write(html)
 
