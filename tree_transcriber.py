@@ -1,7 +1,8 @@
 from bokeh.models import Rect, Arrow
 from tree_structure import VariableTree, _Node
 import numpy as np
-from sklearn.metrics import accuracy_score, recall_score, roc_auc_score, average_precision_score, matthews_corrcoef
+from sklearn.metrics import accuracy_score, recall_score, roc_auc_score, average_precision_score, matthews_corrcoef, \
+    f1_score
 from layout_parameters import ITALIC_VARS
 
 # Remove scikit warnings
@@ -181,6 +182,12 @@ class MDR:
                                         Y_predicted[pred_cas >= dr_accuracy]) * 100 if \
                     len(np.unique(Y_target[pred_cas >= dr_accuracy])) > 1 else 0
 
+
+                f1score = f1_score(Y_target[pred_cas >= dr_accuracy],
+                                   Y_predicted[pred_cas >= dr_accuracy],
+                                   zero_division=0) * 100 if \
+                    len(np.unique(Y_target[pred_cas >= dr_accuracy])) > 1 else 0
+
                 # bal_acc = balanced_accuracy_score(Y_target[pred_cas > dr_accuracy],
                 #                                  Y_predicted[pred_cas > dr_accuracy])
                 sensitivity = recall_score(Y_target[pred_cas >= dr_accuracy],
@@ -198,7 +205,7 @@ class MDR:
                 mdr_values.append({'dr': dr / 100, 'accuracy': acc, 'bal_acc': bal_acc,
                                    'sens': sensitivity, 'spec': specificity, 'perc_node': perc_node,
                                    'perc_pop': perc_pop, 'auc': auc, 'auprc': auprc, 'mean_ca': mean_ca,
-                                   'pos_perc': pos_class_occurence, 'mcc': mcc})
+                                   'pos_perc': pos_class_occurence, 'mcc': mcc, 'f1score': f1score})
 
         for i, values in enumerate(mdr_values):
             for metric in values:

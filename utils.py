@@ -1,7 +1,7 @@
 import inspect
 import numpy as np
 from sklearn.metrics import accuracy_score, recall_score, roc_auc_score, average_precision_score, matthews_corrcoef, \
-    precision_score
+    precision_score, f1_score
 
 
 def filter_dict(func, **kwarg_dict):
@@ -61,7 +61,7 @@ def get_mdr(Y_target, Y_predicted, predicted_prob, predicted_accuracies):
 
     for dr in range(100, 0, -1):
         dr_accuracy = sorted_accuracies[int(len(sorted_accuracies) * (
-                    1 - dr / 100))]  # np.percentile(predicted_accuracies, 100 - dr, interpolation="lower")
+                1 - dr / 100))]  # np.percentile(predicted_accuracies, 100 - dr, interpolation="lower")
 
         if dr_accuracy != prev_dr_accuracy:
             prev_dr_accuracy = dr_accuracy
@@ -77,6 +77,11 @@ def get_mdr(Y_target, Y_predicted, predicted_prob, predicted_accuracies):
             mcc = matthews_corrcoef(Y_target[predicted_accuracies >= dr_accuracy],
                                     Y_predicted[predicted_accuracies >= dr_accuracy]) if \
                 len(np.unique(Y_target[predicted_accuracies >= dr_accuracy])) > 1 else 0
+            f1score = f1_score(Y_target[predicted_accuracies >= dr_accuracy],
+                               Y_predicted[predicted_accuracies >= dr_accuracy],
+                               zero_division=0) if \
+                len(np.unique(Y_target[predicted_accuracies >= dr_accuracy])) > 1 else 0
+
             # bal_acc = balanced_accuracy_score(Y_target[predicted_accuracies > dr_accuracy],
             #                                  Y_predicted[predicted_accuracies > dr_accuracy])
             sensitivity = recall_score(Y_target[predicted_accuracies >= dr_accuracy],
@@ -94,7 +99,7 @@ def get_mdr(Y_target, Y_predicted, predicted_prob, predicted_accuracies):
             bal_acc = (sensitivity + specificity) / 2
             mdr_values.append({'dr': dr, 'accuracy': acc, 'bal_acc': bal_acc, 'perc_node': perc_node,
                                'sens': sensitivity, 'spec': specificity, 'auc': auc, 'auprc': auprc, 'mcc': mcc,
-                               'ppv': ppv, 'npv': npv})
+                               'ppv': ppv, 'npv': npv, 'f1score': f1score})
 
     mdr_values = np.array(mdr_values)
 

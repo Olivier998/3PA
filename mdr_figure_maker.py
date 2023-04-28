@@ -32,6 +32,7 @@ AUC = 'auc'
 AUPRC = 'auprc'
 ACC = 'accuracy'
 BAL_ACC = 'bal_acc'
+F1_SCORE = 'f1score'
 MCC = 'mcc'
 MEAN_CA = 'mean_ca'
 NPV = 'npv'
@@ -45,10 +46,11 @@ DR = 'dr'
 
 METRICS_DISPLAY = {PERC_POS: '% positive', AUC: 'Auc', AUPRC: 'Auprc', BAL_ACC: 'Bal_Acc', MEAN_CA: 'Mean CA',
                    PERC_POP: '% pop', PERC_NODE: '% node', SENSITIVITY: 'sens',
-                   SPECIFICITY: 'spec', DR: 'DR', ACC: 'Acc', MCC: 'Mcc', PPV: 'PPV', NPV: 'NPV'}
+                   SPECIFICITY: 'spec', DR: 'DR', ACC: 'Acc', MCC: 'Mcc', PPV: 'PPV', NPV: 'NPV', F1_SCORE: 'F1-Score'}
 
 METRICS = [PERC_POS, BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, MEAN_CA, PERC_POP, PERC_NODE]
-METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, AUPRC, MCC, PPV, NPV]]
+METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, AUPRC, MCC, PPV, NPV,
+                                                      F1_SCORE]]
 
 
 def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
