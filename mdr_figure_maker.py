@@ -24,6 +24,7 @@ from tree_transcriber import TreeTranscriber
 from utils import get_mdr
 import numpy as np
 import time
+import json
 
 THRESHOLD = 0.5
 
@@ -603,6 +604,10 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
         os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w') as file:
         file.write(html)
+
+    path_json = os.path.abspath(filename + '.json')
+    with open(path_json, 'w') as file:
+        json.dump(mdr_sampratio_dict, file)
 
     webbrowser.open(url=path)
 
