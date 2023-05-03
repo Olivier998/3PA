@@ -247,6 +247,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                                     (MCC, f'@{METRICS_DISPLAY[MCC]}'),
                                     (PPV, f'@{METRICS_DISPLAY[PPV]}'),
                                     (NPV, f'@{METRICS_DISPLAY[NPV]}'),
+                                    (F1_SCORE, f'@{METRICS_DISPLAY[F1_SCORE]}'),
                                     ])
     profile_hover = HoverTool(tooltips=[('Declaration rate', '@dr_profile_x'),
                                         ('Profiles', '@dr_profile_lost{safe}'),
