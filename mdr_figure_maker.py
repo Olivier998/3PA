@@ -71,7 +71,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                        sizing_mode="stretch_width",
                        styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
                                "width": "75%", "align-self": "center"})
-    slider_minleaf = Slider(start=0, end=45, value=0, step=5, title='Min sample % in leafs',
+    slider_minleaf = Slider(start=-5, end=45, value=0, step=5, title='Min sample % in leafs',
                             sizing_mode="stretch_width",
                             styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
                                     "width": "75%", "align-self": "center"})
@@ -128,18 +128,13 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     for min_perc in range(slider_minleaf.start,
                           slider_minleaf.end + slider_minleaf.step,
                           slider_minleaf.step):
-        ca_profile_values = ca_profile.predict(x, min_samples_ratio=min_perc)
-        min_values_sampratio = np.array([min(rf_val, prof_val) for rf_val, prof_val in
-                                         zip(ca_rf_values, ca_profile_values)])
+        if min_perc >= 0:
+            ca_profile_values = ca_profile.predict(x, min_samples_ratio=min_perc)
+            min_values_sampratio = np.array([min(rf_val, prof_val) for rf_val, prof_val in
+                                             zip(ca_rf_values, ca_profile_values)])
+        else:
+            min_values_sampratio = ca_rf_values
         min_cas[min_perc] = min_values_sampratio
-
-        #temp
-        if min_perc==0:
-            temp = x.copy()
-            temp['carf'] = ca_rf_values
-            temp['cadt'] = ca_profile_values
-            temp['min'] = min_values_sampratio
-            #temp.to_csv('test.csv')
 
         # Get mdr values for every samples ratio
         mdr_values = get_mdr(y, y_pred, predicted_prob, min_values_sampratio)
@@ -174,36 +169,13 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                 lost_profiles_id = list(set(profiles_curr_id) - set(profiles_next_id))
                 # print(f"{lost_profiles=}")
                 dr_profile.append(int(100 * len(min_values_sampratio[min_values_sampratio >= min_ca_curr]) /
-                                      len(ca_profile_values)))
+                                      len(min_values_sampratio)))
 
                 dr_lost_profiles.append("<br>".join(lost_profiles))
                 dr_lost_profiles_id.append((lost_profiles_id))
             profiles_curr = profiles_next
             profiles_curr_id = profiles_next_id
-        #if min_perc==0:
-        #    print(f"{unique_ca_profile_values[len(unique_ca_profile_values)-2]}  "
-        #          f"{unique_ca_profile_values[len(unique_ca_profile_values)-1]}")
-        """for min_ca_id in range(0, len(unique_ca_profile_values)-1):
-            min_ca_curr = unique_ca_profile_values[min_ca_id]
-            min_ca_next = unique_ca_profile_values[min_ca_id + 1]
 
-            profiles_curr = ca_profile.get_all_profiles(min_ca=min_ca_curr, min_samples_ratio=min_perc)
-            profiles_next = ca_profile.get_all_profiles(min_ca=min_ca_next, min_samples_ratio=min_perc)
-
-            print(f"{min_ca_id=} {min_ca_curr} {min_ca_next} {len(profiles_curr)}  {len(profiles_next)}  {len(min_values_sampratio[min_values_sampratio >= min_ca_curr]) /len(ca_profile_values)}")
-
-            if len(profiles_curr) != len(profiles_next):
-                lost_profiles = list(set(profiles_curr) - set(profiles_next))
-                dr_profile.append(int(100 * len(min_values_sampratio[min_values_sampratio >= min_ca_curr]) /
-                                      len(ca_profile_values)))
-
-                dr_lost_profiles.append("<br>".join(lost_profiles))
-        """
-        # dr_profile = [int(100 * len(min_values_sampratio[min_values_sampratio >= min_ca]) / len(ca_profile_values))
-        #              for min_ca in unique_ca_profile_values]
-        # dr_profile_y = [len(min_values_sampratio[min_values_sampratio >= min_ca]) / len(ca_profile_values)
-        #                for min_ca in unique_ca_profile_values]
-        # print(f"{dr_profile=}")
         dr_profile_x = [dr if dr in dr_profile else np.nan for dr in
                         mdr_dict[METRICS_DISPLAY[DR]]]  # 100 if dr == 100 else
         dr_profile_y = [0 if dr in dr_profile else np.nan for dr in  # dr / 100
@@ -219,10 +191,6 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
         mdr_dict['dr_profile_lost'] = dr_profile_lost
         mdr_dict['dr_profile_lost_id'] = dr_profile_lost_id
         # [0 for dr in mdr_dict[METRICS_DISPLAY[DR]]]  # dr / 100
-        #if min_perc == 0:
-        #    print(f"{unique_ca_profile_values=}")
-        #    print(100 * len(min_values_sampratio[min_values_sampratio >= unique_ca_profile_values[-2]]) /
-        #          len(ca_profile_values))
         # Save values
         mdr_sampratio_dict['samp_ratio'].append(min_perc)
         mdr_sampratio_dict['values'].append(mdr_dict)

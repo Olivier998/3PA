@@ -7,7 +7,7 @@ class VariableTree:
     head = None
 
     def __init__(self, max_depth=None, min_sample_ratio=1):
-        if min_sample_ratio == 0:
+        if min_sample_ratio <= 0:
             min_sample_ratio = 1
         else:
             min_sample_ratio = min_sample_ratio / 100
@@ -46,12 +46,13 @@ class VariableTree:
         right_child = self.dtr.tree_.children_right[node_id]
 
         node_value = y.mean()
+        node_max = y.max()
 
         node_samples_ratio = self.dtr.tree_.n_node_samples[node_id] / self.dtr.tree_.n_node_samples[0] * 100
 
         # If we are at a leaf
         if left_child == -1:
-            curr_node = _Node(value=node_value, samples_ratio=node_samples_ratio,
+            curr_node = _Node(value=node_value, value_max=node_max, samples_ratio=node_samples_ratio,
                               node_id=self.nb_nodes)
             return curr_node
 
@@ -60,6 +61,7 @@ class VariableTree:
         node_feature = self.features[node_feature_id]
 
         curr_node = _Node(value=node_value,
+                          value_max=node_max,
                           samples_ratio=node_samples_ratio,
                           threshold=node_thresh,
                           feature=node_feature,
@@ -84,8 +86,9 @@ class _Node:
     c_left = None
     c_right = None
 
-    def __init__(self, value, samples_ratio, threshold=None, feature=None, feature_id=None, node_id=0):
+    def __init__(self, value, value_max, samples_ratio, threshold=None, feature=None, feature_id=None, node_id=0):
         self.value = value
+        self.value_max = value_max
         self.samples_ratio = samples_ratio
         self.threshold = threshold
         self.feature = feature
@@ -117,8 +120,12 @@ class _Node:
                 curr_profile_child += c_prev_str
                 curr_child_nodeid += c_prev_id
 
-        if self.value < min_ca and len(curr_profile_child) == 0:
-            return [], []
+        if min_samples_ratio < 0:  # Case where we don't use profiles
+            if self.value_max < min_ca and len(curr_profile_child) == 0:
+                return [], []
+        else:
+            if self.value < min_ca and len(curr_profile_child) == 0:
+                return [], []
 
         return [*curr_profile_child, previous_thresh], [*curr_child_nodeid, self.node_id]
 
