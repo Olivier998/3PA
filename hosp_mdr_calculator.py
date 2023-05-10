@@ -1,4 +1,5 @@
 import pandas as pd
+from tqdm import tqdm
 
 from mdr_figure_maker import generate_mdr
 
@@ -15,7 +16,7 @@ df = pd.read_csv(data_file)
 
 unique_hosp_id = df['hospitalid'].unique()
 
-for hosp_id in unique_hosp_id:
+for hosp_id in tqdm(unique_hosp_id):
     hosp_data = df[df['hospitalid'] == hosp_id]
     if hosp_data.shape[0] >= min_hosp_samples:
         hosp_y = hosp_data[y_true_str].to_numpy()
