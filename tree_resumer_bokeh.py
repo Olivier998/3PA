@@ -1,10 +1,9 @@
 from io import StringIO
-import numpy as np
 from numbers import Integral
 import pandas as pd
 from scipy import stats
 import numpy as np
-from sklearn.metrics import recall_score, roc_auc_score, roc_curve
+from sklearn.metrics import mean_squared_error  # recall_score, roc_auc_score, roc_curve
 
 
 class Sentinel:
@@ -134,7 +133,6 @@ class _BaseTreeExporter:
         # revoir cest quoi original data vs test data, genre c'est quoi train ou test
         # original c'est tree_train ou encore test set
 
-
         original_data = decision_tree.original_data
         original_th = decision_tree.original_th
         test_data = decision_tree.test_data
@@ -192,17 +190,17 @@ class _BaseTreeExporter:
             test_data[tree.children_left[node_id]] = data_test[data_test[feature] <= tree.threshold[node_id]]
             test_data[tree.children_right[node_id]] = data_test[data_test[feature] > tree.threshold[node_id]]
 
-        #if parent is not None:
+        # if parent is not None:
         #    prev_feature = self.feature_names[tree.feature[parent]]
-            # Add percentage of missing data of previous decision feature
-            #tree_missing_perc = round(original_data[node_id][f'miss_{prev_feature}'].mean() * 100, self.precision)
-            #sl_missing_perc = round(test_data[node_id][f'miss_{prev_feature}'].mean() * 100, self.precision)
-            #node_values.loc['Missing feature', 'tree_train'] = f"{tree_missing_perc} "
-            #node_values.loc['Missing feature', 'sl_train'] = f"{sl_missing_perc} "
+        # Add percentage of missing data of previous decision feature
+        # tree_missing_perc = round(original_data[node_id][f'miss_{prev_feature}'].mean() * 100, self.precision)
+        # sl_missing_perc = round(test_data[node_id][f'miss_{prev_feature}'].mean() * 100, self.precision)
+        # node_values.loc['Missing feature', 'tree_train'] = f"{tree_missing_perc} "
+        # node_values.loc['Missing feature', 'sl_train'] = f"{sl_missing_perc} "
 
-        #else:
-            # Add percentage of missing data of previous decision feature
-            #node_values.loc['Missing feature'] = ''
+        # else:
+        # Add percentage of missing data of previous decision feature
+        # node_values.loc['Missing feature'] = ''
 
         # Write impurity
         """if self.impurity:
@@ -247,8 +245,8 @@ class _BaseTreeExporter:
             # node_string += str(tree.n_node_samples[node_id]) + characters[4]
         """
         # Write node class distribution / regression value
-        #node_values.loc['misclassified', 'tree_train'] = round(original_data[node_id]['misclassified'].mean(), self.precision)
-        #node_values.loc['misclassified', 'sl_train'] = round(test_data[node_id]['misclassified'].mean(), self.precision)
+        # node_values.loc['misclassified', 'tree_train'] = round(original_data[node_id]['misclassified'].mean(), self.precision)
+        # node_values.loc['misclassified', 'sl_train'] = round(test_data[node_id]['misclassified'].mean(), self.precision)
         """
         if self.proportion and tree.n_classes[0] != 1:
             # For classification this will show the proportion of samples
@@ -290,97 +288,132 @@ class _BaseTreeExporter:
 
         # Add percentage of deceased
         tree_deceased_prob = np.around(original_data[node_id]['deceased'].mean(), self.precision)
-        #tree_deceased_std = np.around(original_data[node_id]['deceased'].std(), self.precision)
+        # tree_deceased_std = np.around(original_data[node_id]['deceased'].std(), self.precision)
         node_values.loc['deceased', 'tree_train'] = f"{tree_deceased_prob}"
 
         th_deceased_prob = np.around(original_th[node_id]['deceased'].mean(), self.precision)
         node_values.loc['deceased', 'original_th'] = f"{th_deceased_prob}"
 
         sl_deceased_prob = np.around(test_data[node_id]['deceased'].mean(), self.precision)
-        #sl_deceased_std = np.around(test_data[node_id]['deceased'].std(), self.precision)
+        # sl_deceased_std = np.around(test_data[node_id]['deceased'].std(), self.precision)
         node_values.loc['deceased', 'sl_train'] = f"{sl_deceased_prob}"
 
         # Add msqe
-        tree_msqe = np.around(original_data[node_id]['diff'].mean(), self.precision)
-        # tree_deceased_std = np.around(original_data[node_id]['deceased'].std(), self.precision)
-        node_values.loc['diff', 'tree_train'] = f"{tree_msqe}"
+        tree_msqe = np.sqrt(mean_squared_error(original_data[node_id]['this_tree'],
+                                               original_data[node_id]['other_tree']))
+        tree_msqe = np.around(tree_msqe, self.precision)
+        node_values.loc['msqe', 'tree_train'] = f"{tree_msqe}"
 
-        th_msqe = np.around(original_th[node_id]['diff'].mean(), self.precision)
-        node_values.loc['diff', 'original_th'] = f"{th_msqe}"
+        if test_data[node_id].shape[0] > 0:
+            sl_msqe = np.around(np.sqrt(mean_squared_error(test_data[node_id]['this_tree'],
+                                                           test_data[node_id]['other_tree'])), self.precision)
+        else:
+            sl_msqe = ''
+        node_values.loc['msqe', 'sl_train'] = f"{sl_msqe}"
 
-        sl_msqe = np.around(test_data[node_id]['diff'].mean(), self.precision)
-        # sl_deceased_std = np.around(test_data[node_id]['deceased'].std(), self.precision)
-        node_values.loc['diff', 'sl_train'] = f"{sl_msqe}"
+        nb_iter = original_th[node_id]['nb_iter'].iloc[0]
+        th_msqe_vals = np.sqrt(
+            (original_th[node_id][range(nb_iter)] ** 2).mean(axis=0))  # original_th[range(nb_iter)].mean(axis=0)
+        th_msqe_95 = np.around(th_msqe_vals.quantile(0.95, interpolation='nearest'), self.precision)
+        th_msqe_99 = np.around(th_msqe_vals.quantile(0.99, interpolation='nearest'), self.precision)
+        node_values.loc['msqe95', 'original_th'] = f"{th_msqe_95}"
+        node_values.loc['msqe99', 'original_th'] = f"{th_msqe_99}"
 
-        # Add max diff
-        tree_msqe = np.around(original_data[node_id]['diff'].max(), self.precision)
-        # tree_deceased_std = np.around(original_data[node_id]['deceased'].std(), self.precision)
-        node_values.loc['maxdiff', 'tree_train'] = f"{tree_msqe}"
+        # Add absolute difference
+        tree_mae = np.abs(original_data[node_id]['this_tree'] - original_data[node_id]['other_tree']).mean()
+        tree_mae = np.around(tree_mae, self.precision)
+        node_values.loc['mae', 'tree_train'] = f"{tree_mae}"
 
-        th_msqe = np.around(original_th[node_id]['diff'].max(), self.precision)
-        node_values.loc['maxdiff', 'original_th'] = f"{th_msqe}"
+        sl_mae = np.abs(test_data[node_id]['this_tree'] - test_data[node_id]['other_tree']).mean()
+        sl_mae = np.around(sl_mae, self.precision)
+        node_values.loc['mae', 'sl_train'] = f"{sl_mae}"
 
-        sl_msqe = np.around(test_data[node_id]['diff'].max(), self.precision)
-        # sl_deceased_std = np.around(test_data[node_id]['deceased'].std(), self.precision)
-        node_values.loc['maxdiff', 'sl_train'] = f"{sl_msqe}"
+        th_mae_vals = np.abs(original_th[node_id][range(nb_iter)]).mean(axis=0)
+        th_mae_95 = np.around(th_mae_vals.quantile(0.95, interpolation='nearest'), self.precision)
+        th_mae_99 = np.around(th_mae_vals.quantile(0.99, interpolation='nearest'), self.precision)
+        node_values.loc['mae95', 'original_th'] = f"{th_mae_95}"
+        node_values.loc['mae99', 'original_th'] = f"{th_mae_99}"
+
+        # tree_msqe = np.around(original_data[node_id]['diff'].mean(), self.precision)
+        # # tree_deceased_std = np.around(original_data[node_id]['deceased'].std(), self.precision)
+        # node_values.loc['diff', 'tree_train'] = f"{tree_msqe}"
+        #
+        # th_msqe = np.around(original_th[node_id]['diff'].mean(), self.precision)
+        # node_values.loc['diff', 'original_th'] = f"{th_msqe}"
+        #
+        # sl_msqe = np.around(test_data[node_id]['diff'].mean(), self.precision)
+        # # sl_deceased_std = np.around(test_data[node_id]['deceased'].std(), self.precision)
+        # node_values.loc['diff', 'sl_train'] = f"{sl_msqe}"
+
+        # # Add max diff
+        # tree_msqe = np.around(original_data[node_id]['diff'].max(), self.precision)
+        # # tree_deceased_std = np.around(original_data[node_id]['deceased'].std(), self.precision)
+        # node_values.loc['maxdiff', 'tree_train'] = f"{tree_msqe}"
+        #
+        # th_msqe = np.around(original_th[node_id]['diff'].max(), self.precision)
+        # node_values.loc['maxdiff', 'original_th'] = f"{th_msqe}"
+        #
+        # sl_msqe = np.around(test_data[node_id]['diff'].max(), self.precision)
+        # # sl_deceased_std = np.around(test_data[node_id]['deceased'].std(), self.precision)
+        # node_values.loc['maxdiff', 'sl_train'] = f"{sl_msqe}"
 
         # Add percentage of missing data (global)
-        #tree_missing_cols = [col for col in original_data[node_id].columns if 'miss_' in col]
-        #sl_missing_cols = [col for col in test_data[node_id].columns if 'miss_' in col]
+        # tree_missing_cols = [col for col in original_data[node_id].columns if 'miss_' in col]
+        # sl_missing_cols = [col for col in test_data[node_id].columns if 'miss_' in col]
 
-        #tree_missing_data = np.around(original_data[node_id][tree_missing_cols].mean().mean()*100, self.precision)
-        #node_values.loc['Missing data', 'tree_train'] = f"{tree_missing_data}"
+        # tree_missing_data = np.around(original_data[node_id][tree_missing_cols].mean().mean()*100, self.precision)
+        # node_values.loc['Missing data', 'tree_train'] = f"{tree_missing_data}"
 
-        #sl_missing_data = np.around(test_data[node_id][sl_missing_cols].mean().mean()*100, self.precision)
-        #node_values.loc['Missing data', 'sl_train'] = f"{sl_missing_data}"
+        # sl_missing_data = np.around(test_data[node_id][sl_missing_cols].mean().mean()*100, self.precision)
+        # node_values.loc['Missing data', 'sl_train'] = f"{sl_missing_data}"
 
         # Add best threshold
-        #ori_fpr, ori_tpr, ori_thresholds = roc_curve(original_data[node_id]['deceased'],
+        # ori_fpr, ori_tpr, ori_thresholds = roc_curve(original_data[node_id]['deceased'],
         #                                             original_data[node_id]['prediction'],
         #                                             pos_label=1)
         # calculate the g-mean for each threshold
-        #ori_gmeans = np.sqrt(ori_tpr * (1 - ori_fpr))
-        #ori_best_thresh = ori_thresholds[np.argmax(ori_gmeans)]
-        #node_values.loc['threshold', 'tree_train'] = f"{np.around(ori_best_thresh, self.precision)}"
+        # ori_gmeans = np.sqrt(ori_tpr * (1 - ori_fpr))
+        # ori_best_thresh = ori_thresholds[np.argmax(ori_gmeans)]
+        # node_values.loc['threshold', 'tree_train'] = f"{np.around(ori_best_thresh, self.precision)}"
 
         # original_data[node_id].loc[:, ['predicted_label']] = original_data[node_id]['prediction'] >= ori_best_thresh
 
-        #test_fpr, test_tpr, test_thresholds = roc_curve(test_data[node_id]['deceased'],
+        # test_fpr, test_tpr, test_thresholds = roc_curve(test_data[node_id]['deceased'],
         #                                                test_data[node_id]['prediction'],
         #                                                pos_label=1)
         # calculate the g-mean for each threshold
-        #test_gmeans = np.sqrt(test_tpr * (1 - test_fpr))
-        #test_best_thresh = test_thresholds[np.argmax(test_gmeans)]
-        #node_values.loc['threshold', 'sl_train'] = f"{np.around(test_best_thresh, self.precision)}"
+        # test_gmeans = np.sqrt(test_tpr * (1 - test_fpr))
+        # test_best_thresh = test_thresholds[np.argmax(test_gmeans)]
+        # node_values.loc['threshold', 'sl_train'] = f"{np.around(test_best_thresh, self.precision)}"
 
         # test_data[node_id].loc[:, ['predicted_label']] = test_data[node_id]['prediction'] >= test_best_thresh
 
         # Add sensitivity
-        #node_values.loc['sensitivity', 'tree_train'] = \
+        # node_values.loc['sensitivity', 'tree_train'] = \
         #    f"{np.around(recall_score(original_data[node_id]['deceased'],original_data[node_id]['predicted_label'], pos_label=1, zero_division=0), self.precision)}"
 
-        #node_values.loc['sensitivity', 'sl_train'] = \
+        # node_values.loc['sensitivity', 'sl_train'] = \
         #    f"{np.around(recall_score(test_data[node_id]['deceased'],test_data[node_id]['predicted_label'], pos_label=1, zero_division=0), self.precision)}"
 
         # Add specificity
-        #node_values.loc['specificity', 'tree_train'] = \
+        # node_values.loc['specificity', 'tree_train'] = \
         #    f"{np.around(recall_score(original_data[node_id]['deceased'], original_data[node_id]['predicted_label'], pos_label=0, zero_division=0), self.precision)}"
 
-        #node_values.loc['specificity', 'sl_train'] = \
+        # node_values.loc['specificity', 'sl_train'] = \
         #    f"{np.around(recall_score(test_data[node_id]['deceased'], test_data[node_id]['predicted_label'], pos_label=0, zero_division=0), self.precision)}"
 
         # Add auc
-        #try:
+        # try:
         #    tree_auc = np.around(roc_auc_score(original_data[node_id]['deceased'], original_data[node_id]['predicted_label']), self.precision)
-        #except Exception as e:
+        # except Exception as e:
         #    tree_auc = ""
-        #try:
+        # try:
         #    sl_auc = np.around(roc_auc_score(test_data[node_id]['deceased'], test_data[node_id]['predicted_label']), self.precision)
-        #except Exception as e:
+        # except Exception as e:
         #    sl_auc = ""
-        #node_values.loc['auc', 'tree_train'] = f"{tree_auc}"
+        # node_values.loc['auc', 'tree_train'] = f"{tree_auc}"
 
-        #node_values.loc['auc', 'sl_train'] = f"{sl_auc}"
+        # node_values.loc['auc', 'sl_train'] = f"{sl_auc}"
 
         """
         node_string += f"P_hat(C1) = {pred_prob} ({pred_std}) {characters[4]}"
@@ -580,72 +613,73 @@ class _DOTTreeExporter(_BaseTreeExporter):
             else:
                 self.ranks[str(depth)].append(str(node_id))
 
-            headers = "{   | # data | % deceased | mean predicted prob | abs diff | max diff }"  # | missing data | missing feature | P(misclass)|" \
-            #" AUC | Sensitivity | Specificity | threshold
+            headers = "{   | # data | % deceased | mean predicted prob | " \
+                      "Mean abs diff (95 - 99) | Mean quad diff (95 - 99) }"  # | missing data | missing feature | P(misclass)|" \
+            # " AUC | Sensitivity | Specificity | threshold
 
             # Get values to insert in graph
             values = self.node_to_str(tree, node_id, criterion=criterion, decision_tree=decision_tree, parent=parent)
             table_stringth = f"|{{Theoric | " \
-                            f"{values.loc['# patients', 'original_th']} | " \
-                            f"{values.loc['deceased', 'original_th']} |" \
-                            f"{values.loc['prediction', 'original_th']} |" \
-                            f"{values.loc['diff', 'original_th']} |" \
-                            f"{values.loc['maxdiff', 'original_th']} " \
-                            f"}}"
+                             f"{values.loc['# patients', 'original_th']} | " \
+                             f"{values.loc['deceased', 'original_th']} |" \
+                             f"{values.loc['prediction', 'original_th']} |" \
+                             f"{values.loc['mae95', 'original_th']} - {values.loc['mae99', 'original_th']}|" \
+                             f"{values.loc['msqe95', 'original_th']} - {values.loc['msqe99', 'original_th']} " \
+                             f"}}"
             table_string1 = f"|{{Pre-covid | " \
-                            f"{values.loc['# patients', 'tree_train'] } | " \
+                            f"{values.loc['# patients', 'tree_train']} | " \
                             f"{values.loc['deceased', 'tree_train']} |" \
                             f"{values.loc['prediction', 'tree_train']} |" \
-                            f"{values.loc['diff', 'tree_train']} |" \
-                            f"{values.loc['maxdiff', 'tree_train']} " \
+                            f"{values.loc['mae', 'tree_train']} |" \
+                            f"{values.loc['msqe', 'tree_train']} " \
                             f"}}"
-                            #f"{values.loc['Missing data', 'tree_train']} |" \
-                            #f"{values.loc['Missing feature', 'tree_train']} |" \
-                            #f"{values.loc['misclassified', 'tree_train']} |" \
-                            #f"{values.loc['auc', 'tree_train']} |" \
-                            #f"{values.loc['sensitivity', 'tree_train']} |" \
-                            #f"{values.loc['specificity', 'tree_train']} |" \
-                            #f"{values.loc['threshold', 'tree_train']} " \
+            # f"{values.loc['Missing data', 'tree_train']} |" \
+            # f"{values.loc['Missing feature', 'tree_train']} |" \
+            # f"{values.loc['misclassified', 'tree_train']} |" \
+            # f"{values.loc['auc', 'tree_train']} |" \
+            # f"{values.loc['sensitivity', 'tree_train']} |" \
+            # f"{values.loc['specificity', 'tree_train']} |" \
+            # f"{values.loc['threshold', 'tree_train']} " \
 
             table_string2 = f"|{{Post-covid | " \
                             f"{values.loc['# patients', 'sl_train']} | " \
                             f"{values.loc['deceased', 'sl_train']} |" \
                             f"{values.loc['prediction', 'sl_train']} |" \
-                            f"{values.loc['diff', 'sl_train']} |" \
-                            f"{values.loc['maxdiff', 'sl_train']} " \
+                            f"{values.loc['mae', 'sl_train']} |" \
+                            f"{values.loc['msqe', 'sl_train']} " \
                             f"}}" if not (values['tree_train'] == values['sl_train']).all() else ''
-                            #f"{values.loc['Missing data', 'sl_train']} |" \
-                            #f"{values.loc['Missing feature', 'sl_train']} |" \
-                            #f"{values.loc['misclassified', 'sl_train']} |" \
-                            #f"{values.loc['auc', 'sl_train']} |" \
-                            #f"{values.loc['sensitivity', 'sl_train']} |" \
-                            #f"{values.loc['specificity', 'sl_train']} |" \
-                            #f"{values.loc['threshold', 'sl_train']} " \
+            # f"{values.loc['Missing data', 'sl_train']} |" \
+            # f"{values.loc['Missing feature', 'sl_train']} |" \
+            # f"{values.loc['misclassified', 'sl_train']} |" \
+            # f"{values.loc['auc', 'sl_train']} |" \
+            # f"{values.loc['sensitivity', 'sl_train']} |" \
+            # f"{values.loc['specificity', 'sl_train']} |" \
+            # f"{values.loc['threshold', 'sl_train']} " \
 
             feature_row = f'| {self.feature_names[tree.feature[node_id]]} \<= ' \
                           f'{round(tree.threshold[node_id], 2)}' if left_child != -1 else ''
 
             self.out_file.write(
-                '%d [label="{{%s %s}%s}"' % (node_id, headers, table_stringth+table_string1+table_string2, feature_row)
+                '%d [label="{{%s %s}%s}"' % (
+                    node_id, headers, table_stringth + table_string1 + table_string2, feature_row)
             )
-            #self.out_file.write(
+            # self.out_file.write(
             #   ' \n%d [label = "{{{      | # data | P(C1) | P_hat(C1) | missing data | missing feature | P(misclass) } | {data_test | nb1 | p1 | ph1 | m1 | mf1 | Pm1} | {data_train | nb2 | p2 | ph2 | m2 | mf2 | Pm2}} | Feature \<= thresh}  "];' % (node_id)  #'%d [label="{{%s %s}| %s}"' % (node_id, headers, test, 'feature = xy')
-            #)
+            # )
 
-
-            #self.out_file.write(
+            # self.out_file.write(
             #    '%d [label = "{{lel} %s}"' % (node_id, feature_row)
-            #)
+            # )
 
             """if self.filled:
                 self.out_file.write(
                     ', fillcolor="%s"' % self.get_fill_color(tree, node_id)
             )"""
-            if (values.loc['diff', 'sl_train'] > values.loc['diff', 'original_th']):# or \
-               #(values.loc['diff', 'tree_train'] > values.loc['diff', 'original_th']):
-                self.out_file.write(
-                    ', color="yellow"'
-                )
+            # if (values.loc['diff', 'sl_train'] > values.loc['diff', 'original_th']):  # or \
+            #     # (values.loc['diff', 'tree_train'] > values.loc['diff', 'original_th']):
+            #     self.out_file.write(
+            #         ', color="yellow"'
+            #     )
             self.out_file.write("];")
 
             if parent is not None:
@@ -669,7 +703,8 @@ class _DOTTreeExporter(_BaseTreeExporter):
 
                         self.out_file.write('%d, headlabel="True"]' % angles[0])
                     else:
-                        self.out_file.write('%d, headlabel="False"]' % angles[1])  # -{missing_perc1}%%-{missing_perc2}%%
+                        self.out_file.write(
+                            '%d, headlabel="False"]' % angles[1])  # -{missing_perc1}%%-{missing_perc2}%%
                 self.out_file.write(" ;\n")
 
             if left_child != -1:  # _tree.TREE_LEAF:

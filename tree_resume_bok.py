@@ -8,6 +8,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.utils import resample
 from tqdm import tqdm
 
+
 prob_str = 'probability'
 y_true_str = 'oym'
 
@@ -60,7 +61,8 @@ prob_pre_theoric_glob = df_train_pre_theoric_glob['prediction']
 true_pre_theoric_glob = df_train_pre_theoric_glob['deceased']
 df_train_pre_theoric_glob = df_train_pre_theoric_glob.drop(['prediction', 'deceased'], axis=1)
 
-nb_iter = 100
+nb_iter = 1000
+df_pre_theoric['nb_iter'] = nb_iter
 for iter in tqdm(range(nb_iter)):
     df_train_pre_theoric = resample(df_pre.copy())
     prob_pre_theoric = df_train_pre_theoric['prediction']
@@ -92,7 +94,13 @@ for iter in tqdm(range(nb_iter)):
                                                                                df_train_pre_theoric_glob),
                                                                                tree_pre_theoric.predict(
                                                                                    df_train_pre_theoric_glob))]))
-df_pre_theoric['diff'] = df_pre_theoric[range(nb_iter)].quantile(0.95, interpolation='nearest', axis=1)
+#  ## 95 percentile of differences
+# iter_means = df_pre_theoric[range(nb_iter)].mean(axis=0)
+# iter_means_idx = list(iter_means).index(iter_means.quantile(0.95, interpolation='nearest'))
+#
+# df_pre_theoric['diff'] = df_pre_theoric[iter_means_idx]
+
+    #df_pre_theoric[range(nb_iter)].quantile(0.95, interpolation='nearest', axis=1)
 # .mean(axis=1)  # this_tree
 
 # Post section
@@ -124,7 +132,7 @@ df_pre['this_tree'] = np.array([min(rf_val, prof_val) for rf_val, prof_val in
                                 zip(rf_pre.predict(df_train_pre), tree_pre.predict(df_train_pre))])
 df_pre['other_tree'] = np.array([min(rf_val, prof_val) for rf_val, prof_val in
                                  zip(rf_post.predict(df_train_pre), tree_post.predict(df_train_pre))])
-df_pre['diff'] = np.abs(df_pre['this_tree'] - df_pre['other_tree'])  # ** 2
+# df_pre['diff'] = np.abs(df_pre['this_tree'] - df_pre['other_tree'])  # ** 2
 
 # df_pre_theoric['diff'] = np.abs(df_pre_theoric['this_tree'] - df_pre_theoric['other_tree'])  # ** 2
 
@@ -132,7 +140,7 @@ df_post['this_tree'] = np.array([min(rf_val, prof_val) for rf_val, prof_val in
                                  zip(rf_post.predict(df_train_post), tree_post.predict(df_train_post))])
 df_post['other_tree'] = np.array([min(rf_val, prof_val) for rf_val, prof_val in
                                   zip(rf_pre.predict(df_train_post), tree_pre.predict(df_train_post))])
-df_post['diff'] = np.abs(df_post['this_tree'] - df_post['other_tree'])  # ** 2
+# df_post['diff'] = np.abs(df_post['this_tree'] - df_post['other_tree'])  # ** 2
 
 dot_data = export_graphviz_tree(tree_pre, df_pre, df_pre_theoric, df_post,
                                 feature_names=df_train_pre.columns, proportion=True)
