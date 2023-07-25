@@ -54,7 +54,12 @@ METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPEC
                                                       F1_SCORE]]
 
 
-def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
+def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_threshold=None):
+    if top_threshold:
+        if top_threshold < 1:
+            top_threshold = int(top_threshold * len(predicted_prob))
+        THRESHOLD = sorted(predicted_prob)[-top_threshold]
+
     if filename is None or filename == "":
         filename = 'newtest01'
     curr_time = int(time.time())
