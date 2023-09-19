@@ -55,6 +55,7 @@ METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPEC
 
 
 def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_threshold=None):
+    global THRESHOLD
     if top_threshold:
         if top_threshold < 1:
             top_threshold = int(top_threshold * len(predicted_prob))
@@ -81,7 +82,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
                             styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
                                     "width": "75%", "align-self": "center"})
     max_depth_log = int(np.log2(x.shape[0]))
-    max_depth_profile = min(max_depth_log, 5)
+    max_depth_profile = 3#min(max_depth_log, 5)
     slider_maxdepth = Slider(start=1, end=max_depth_profile, value=max_depth_profile, step=1, title='Max depth',
                              sizing_mode="stretch_width",
                              styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
