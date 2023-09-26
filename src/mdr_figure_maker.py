@@ -9,7 +9,7 @@ from bokeh.palettes import Colorblind8 as palette
 import itertools
 
 from bokeh.io import curdoc
-from constants import FontSize
+from settings.constants import FontSize
 
 from bokeh.embed.standalone import file_html
 from bokeh.resources import CDN
@@ -19,9 +19,9 @@ import webbrowser
 
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import GridSearchCV
-from tree_structure import VariableTree
-from tree_transcriber import TreeTranscriber
-from utils import get_mdr
+from src.trees.tree_structure import VariableTree
+from src.trees.tree_transcriber import TreeTranscriber
+from src.utils import get_mdr
 import numpy as np
 import time
 import json

@@ -1,23 +1,19 @@
-from numpy import linspace, random, array, issubdtype, floating
-from pandas import DataFrame
+from numpy import issubdtype, floating
 import pandas as pd
 from pybase64 import b64decode
-from sklearn.linear_model import LinearRegression
 from sklearn.metrics import balanced_accuracy_score, recall_score, roc_auc_score
 
 from bokeh.io import curdoc
 from bokeh.layouts import row, column, layout
 from bokeh.models import Slider, Div, FileInput, MultiSelect, Select, Button, TextInput, \
-    SVGIcon, Column, ColumnDataSource, Circle
-from bokeh.plotting import figure
+    SVGIcon
 from functools import partial
 
 import io
 
-from utils import filter_dict
-from constants import FontSize, TRUE_LABEL, PRED_LABEL, PRED_PROB
+from src.utils import filter_dict
+from settings.constants import FontSize, TRUE_LABEL, PRED_PROB
 from mdr_figure_maker import generate_mdr
-import time
 
 curr_doc = curdoc()
 
@@ -97,7 +93,7 @@ def upload_data(attr, old, new):
 file_inputer = FileInput(title="Upload data file", accept=[".csv"],
                          styles={"text-align": "center", "font-size": FontSize.NORMAL})
 file_inputer.on_change('value', upload_data)
-with open("settings/images/refresh.svg") as my_file:
+with open("../settings/images/refresh.svg") as my_file:
     icon_test = my_file.read()
 
 # Button to update Global results

@@ -1,9 +1,9 @@
 from bokeh.models import Rect, Arrow
-from tree_structure import VariableTree, _Node
+from tree_structure import VariableTree
 import numpy as np
 from sklearn.metrics import accuracy_score, recall_score, roc_auc_score, average_precision_score, matthews_corrcoef, \
     f1_score
-from layout_parameters import ITALIC_VARS
+from settings.layout_parameters import ITALIC_VARS
 
 # Remove scikit warnings
 import warnings
