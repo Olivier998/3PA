@@ -324,7 +324,7 @@ where diagnosisoffset < 1440
 			, pfv.cpap
 			, pfv.vent
 			-- nursecharting events
-			, LEAST(gcs_min, gcsrev.gcs) as gcs_minrevised
+			, LEAST(gcs_min, gcsrev.gcs) as gcs_min
 			, ncm.hr_min 
 			, ncm.hr_max
 			, temperature_min as tempc_min

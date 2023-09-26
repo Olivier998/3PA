@@ -97,7 +97,7 @@ def upload_data(attr, old, new):
 file_inputer = FileInput(title="Upload data file", accept=[".csv"],
                          styles={"text-align": "center", "font-size": FontSize.NORMAL})
 file_inputer.on_change('value', upload_data)
-with open("refresh.svg") as my_file:
+with open("settings/images/refresh.svg") as my_file:
     icon_test = my_file.read()
 
 # Button to update Global results

@@ -68,7 +68,7 @@ def apply_saps(df: DataFrame, convert_score: bool) -> DataFrame:
 
     # Pao2fio2
     df_saps['pao2fio2'] = df_saps.apply(lambda x:
-                                        transform_pao2fio2(x['pao2fio2'], convert_score)
+                                        transform_pao2fio2(x['pao2fio2'], cpap=x['cpap'], vent=x['vent'])
                                         , axis=1)
 
     # Potassium
@@ -284,25 +284,30 @@ def transform_hr(hr_min: int, hr_max: int, convert_score: bool = True) -> int:
         return saps_hr
 
 
-def transform_pao2fio2(pao2fio2: int, convert_score: bool = True) -> int:
+def transform_pao2fio2(pao2fio2: int, cpap: int, vent: int) -> int:
     """
     Returns the SAPS-II score for a given patient's pao2/fio2 ratio
 
     :param pao2fio2: Smallest pao2fio2 value of patient
-    :param convert_score: Boolean indicating whether returning SAPS-II score or pao2fio2
+    :param cpap:
+    :param vent:
 
     :return: related SAPS-II score
     """
-    if not convert_score:
-        return pao2fio2
+    # If there is ventilation value
+    if pao2fio2 is not None:
+        if pao2fio2 < 100:
+            return 11
+        elif pao2fio2 < 200:
+            return 9
+        return 6
 
-    if pao2fio2 is None:
-        return 0
-    if pao2fio2 < 100:
-        return 11
-    elif pao2fio2 < 200:
-        return 9
-    return 6
+    # If patient on mechanical ventilation or CPAP and no value, impute value
+    elif cpap == 1 or vent == 1:
+        return None
+
+    # Else patient has no respiratory assistance
+    return 0
 
 
 def transform_potassium(pot_min: int, pot_max: int, convert_score: bool) -> int:

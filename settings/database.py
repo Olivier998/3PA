@@ -57,6 +57,8 @@ class EicuSettings:
     , sepsis3
     , unitvisitnumberrevised as unitvisitnumber
     , num_hosp
+    , cpap
+    , vent
     from eicu_crd.sapsii_data_24"""  # Ex. 'select * from {SCHEMA}.{TABLE}'
 
     def get_connection_params(self) -> Tuple[str, str, str, str, str, str]:
@@ -78,6 +80,7 @@ class MimicSettings:
     PORT: str = '5437'  # Ex. '5437'
     SCHEMA: str = 'mimic_derived'  # Ex. 'public'
     QUERY: str = """select stay_id
+    , anchor_year_group
     , hadm_id
     , subject_id
     , hospitalid
@@ -113,6 +116,8 @@ class MimicSettings:
     , sepsis3
     , unitvisitnumber
     , num_hosp
+    , cpap
+    , vent
     from mimic_derived.sapsii_data_24 """  # Ex. 'select * from {SCHEMA}.{TABLE}'
 
     def get_connection_params(self) -> Tuple[str, str, str, str, str, str]:
