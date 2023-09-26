@@ -8,8 +8,9 @@ To have all the requirements needed, you must do the following actions:
 - Clone this repo: ```git clone https://github.com/Olivier998/3PA.git```
 - Move into the directory: ```cd 3PA/```
 - Change branch: ``` git checkout dev ```
-- Create a virtual environment with conda: ```conda create --name 3paenv --file requirements.txt```
+- Create a virtual environment with conda: ```conda create --name 3paenv ```
 - Activate your new environment: ```conda activate 3paenv```
+- Instal required packages: ``` pip install -r requirements.txt ```
 
 ## Test the tool
 You can test the tool using a simulated dataset available in the "data" folder. You can also open the "simulated_data.html" file in a browser to see the result of the 3PA tool applied to the simulated data. Here is a vizualisation of the simulated dataset:
