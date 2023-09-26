@@ -13,7 +13,7 @@ import io
 
 from src.utils import filter_dict
 from settings.constants import FontSize, TRUE_LABEL, PRED_PROB
-from mdr_figure_maker import generate_mdr
+from src.mdr_figure_maker import generate_mdr
 
 curr_doc = curdoc()
 
@@ -93,7 +93,7 @@ def upload_data(attr, old, new):
 file_inputer = FileInput(title="Upload data file", accept=[".csv"],
                          styles={"text-align": "center", "font-size": FontSize.NORMAL})
 file_inputer.on_change('value', upload_data)
-with open("../settings/images/refresh.svg") as my_file:
+with open("settings/images/refresh.svg") as my_file:
     icon_test = my_file.read()
 
 # Button to update Global results
