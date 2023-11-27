@@ -59,7 +59,6 @@ METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPEC
 
 def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_threshold=None, split_valid=False,
                  fixed_tree=''):
-    print(f"{fixed_tree=}")
     global THRESHOLD
     if top_threshold:  # For HOMR model
         if top_threshold < 1:
