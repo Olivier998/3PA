@@ -5,7 +5,7 @@ from mdr_figure_maker import generate_mdr
 
 
 data_file = '../../data/saps_e.csv'
-saved_files = '/hosp/hosp_'
+saved_files = 'hosp/hosp_'
 min_hosp_samples = 200
 
 prob_str = 'probability'
@@ -17,7 +17,7 @@ df = pd.read_csv(data_file)
 unique_hosp_id = df['hospitalid'].unique()
 
 for hosp_id in tqdm(unique_hosp_id):
-    hosp_data = df[df['hospitalid'] == hosp_id]
+    hosp_data = df[df['hospitalid'] == hosp_id].reset_index()
     if hosp_data.shape[0] >= min_hosp_samples:
         hosp_y = hosp_data[y_true_str].to_numpy()
         hosp_y_pred = hosp_data[prob_str].to_numpy()

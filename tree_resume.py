@@ -3,27 +3,32 @@ import numpy as np
 # from tree_structure import VariableTree
 from sklearn.tree import DecisionTreeRegressor
 from tree_transcriber import TreeTranscriber
-from tree_resumer import export_graphviz_tree
+from tree_resumer_homr import export_graphviz_tree
 import graphviz
 
+prob_str = 'probability'
+y_true_str = 'oym'
 
-data_path = 'simulated_data.csv'
+data_path = '../../data/oym.csv'
 
 df = pd.read_csv(data_path)
+df['prediction'] = df[prob_str]
+df['deceased'] = df[y_true_str]
+df = df.drop([prob_str, y_true_str], axis=1)
 
-df_base = df.copy()
-df_base['prediction'] = df_base['pred_prob']
-df_base['deceased'] = df_base['y_true']
-df_base = df_base.drop(['y_true', 'pred_prob'], axis=1)
+df_pre = df[df['admission_year'] < 2019]
+df_post = df[df['admission_year'] > 2019]
 
-prob = df['pred_prob']
-df = df.drop(['y_true', 'pred_prob'], axis=1)
+df_train = df_pre.copy()
+df_train = df_train.drop(['prediction', 'deceased'], axis=1)
+
+prob = df_pre['prediction']
 
 tree = DecisionTreeRegressor(max_depth=5)
-tree.fit(df, prob)
+tree.fit(df_train, prob)
 
-dot_data = export_graphviz_tree(tree, df_base, df_base,
-                                feature_names=df.columns, proportion=True, class_names=['0', '1'])
+dot_data = export_graphviz_tree(tree, df_pre, df_post,
+                                feature_names=df_train.columns, proportion=True)
 
 graph = graphviz.Source(dot_data)
-graph.render('test')
+graph.render('HOMR')

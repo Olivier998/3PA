@@ -44,17 +44,50 @@ PPV = 'ppv'
 SENSITIVITY = 'sens'
 SPECIFICITY = 'spec'
 DR = 'dr'
+# POSPRED = 'pospred'
 
 METRICS_DISPLAY = {PERC_POS: '% positive', AUC: 'Auc', AUPRC: 'Auprc', BAL_ACC: 'Bal_Acc', MEAN_CA: 'Mean CA',
                    PERC_POP: '% pop', PERC_NODE: '% node', SENSITIVITY: 'sens',
                    SPECIFICITY: 'spec', DR: 'DR', ACC: 'Acc', MCC: 'Mcc', PPV: 'PPV', NPV: 'NPV', F1_SCORE: 'F1Score'}
+                   #POSPRED: POSPRED}
 
 METRICS = [PERC_POS, BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, MEAN_CA, PERC_POP, PERC_NODE]
 METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, AUPRC, MCC, PPV, NPV,
-                                                      F1_SCORE]]
+                                                      F1_SCORE]]  # , POSPRED
 
 
-def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
+def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_threshold=None, split_valid=False):
+    global THRESHOLD
+    if top_threshold:  # For HOMR model
+        if top_threshold < 1:
+            top_threshold = int(top_threshold * len(predicted_prob))
+        THRESHOLD = sorted(predicted_prob)[-top_threshold]
+
+    if split_valid:
+        x['y'] = y
+        x['predicted_prob'] = predicted_prob
+
+        x_train = x.sample(frac=0.6, random_state=200)
+        x_test = x.drop(x_train.index)
+
+        y_train = np.array(x_train['y'])
+        predicted_prob_train = np.array(x_train['predicted_prob'])
+        x_train = x_train.drop(columns=['y', 'predicted_prob'])
+
+        y_test = np.array(x_test['y'])
+        predicted_prob_test = np.array(x_test['predicted_prob'])
+        x_test = x_test.drop(columns=['y', 'predicted_prob'])
+
+    else:
+        x_train = x_test = x
+        y_train = y_test = y
+        predicted_prob_train = predicted_prob_test = predicted_prob
+
+    x_train = x_train.reset_index(drop=True)
+    x_test = x_test.reset_index(drop=True)
+
+    del x, y, predicted_prob
+
     if filename is None or filename == "":
         filename = 'newtest01'
     curr_time = int(time.time())
@@ -75,7 +108,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                             sizing_mode="stretch_width",
                             styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
                                     "width": "75%", "align-self": "center"})
-    max_depth_log = int(np.log2(x.shape[0]))
+    max_depth_log = min(int(np.log2(x_train.shape[0])), 5)
     max_depth_profile = min(max_depth_log, 5)
     slider_maxdepth = Slider(start=1, end=max_depth_profile, value=max_depth_profile, step=1, title='Max depth',
                              sizing_mode="stretch_width",
@@ -87,9 +120,11 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                                 stylesheets=[".bk-btn-default {font-size: 1vw; font-weight: bold;}"])
 
     # Section to train misclassification model
-    y_pred = np.array([1 if y_score_i >= THRESHOLD else 0 for y_score_i in predicted_prob])
-    error_prob = 1 - np.abs(y - predicted_prob)
-    sample_weight = np.array([pos_class_weight if yi == 1 else 1 - pos_class_weight for yi in y])
+    # y_pred_train = np.array([1 if y_score_i >= THRESHOLD else 0 for y_score_i in predicted_prob_train])
+    error_prob = 1 - np.abs(y_train - predicted_prob_train)
+    sample_weight = np.array([pos_class_weight / (1-THRESHOLD) if yi == 1 else
+                              (1 - pos_class_weight) / THRESHOLD for yi in y_train])
+    # np.array([pos_class_weight if yi == 1 else 1 - pos_class_weight for yi in y])
 
     # Parameter grid
     param_grid = {
@@ -102,10 +137,10 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     # Instantiate the grid search model
     print('Hyperparameter optimization')
     grid_search = GridSearchCV(estimator=ca_rf, param_grid=param_grid,
-                               cv=min(4, int(x.shape[0] / 2)), n_jobs=-1, verbose=0)
+                               cv=min(4, int(x_train.shape[0] / 2)), n_jobs=-1, verbose=0)
 
     # Fit the grid search to the data
-    grid_search.fit(x, error_prob, sample_weight=sample_weight)
+    grid_search.fit(x_train, error_prob, sample_weight=sample_weight)
     print(grid_search.best_params_)
     print(f"HP done: {int(time.time() - curr_time)}s")
     curr_time = time.time()
@@ -114,30 +149,33 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     ca_rf = grid_search.best_estimator_
 
     # ca_rf.fit(x, error_prob, sample_weight=sample_weight)
-    ca_rf_values = ca_rf.predict(x)
+    ca_rf_values = ca_rf.predict(x_train)
     print(f"CA RF: {int(time.time() - curr_time)}s")
     curr_time = time.time()
 
     ca_profile = VariableTree(max_depth=max_depth_profile, min_sample_ratio=slider_minleaf.start)
-    ca_profile.fit(x, ca_rf_values)
+    ca_profile.fit(x_train, ca_rf_values)
     print(f"CA PROFILE: {int(time.time() - curr_time)}s")
     curr_time = time.time()
 
+    ca_rf_values_test = ca_rf.predict(x_test)
+    del ca_rf_values
     min_cas = {}
     mdr_sampratio_dict = {'samp_ratio': [], 'values': []}
     for min_perc in range(slider_minleaf.start,
                           slider_minleaf.end + slider_minleaf.step,
                           slider_minleaf.step):
         if min_perc >= 0:
-            ca_profile_values = ca_profile.predict(x, min_samples_ratio=min_perc)
+            ca_profile_values = ca_profile.predict(x_test, min_samples_ratio=min_perc)
             min_values_sampratio = np.array([min(rf_val, prof_val) for rf_val, prof_val in
-                                             zip(ca_rf_values, ca_profile_values)])
+                                             zip(ca_rf_values_test, ca_profile_values)])
         else:
-            min_values_sampratio = ca_rf_values
+            min_values_sampratio = ca_rf_values_test
         min_cas[min_perc] = min_values_sampratio
 
         # Get mdr values for every samples ratio
-        mdr_values = get_mdr(y, y_pred, predicted_prob, min_values_sampratio)
+        y_pred_test = np.array([1 if y_score_i >= THRESHOLD else 0 for y_score_i in predicted_prob_test])
+        mdr_values = get_mdr(y_test, y_pred_test, predicted_prob_test, min_values_sampratio)
         # from list of dicts to dict of lists
         mdr_dict = {METRICS_DISPLAY[k]: [dic[k] for dic in mdr_values] for k in mdr_values[0]}
 
@@ -202,6 +240,15 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
     index_current_data = mdr_sampratio_dict['samp_ratio'].index(slider_minleaf.value)
     mdr_current_data = ColumnDataSource(data=mdr_sampratio_dict['values'][index_current_data])
 
+
+    # temp
+    # from copy import deepcopy
+    # temp = deepcopy(x)
+    # temp['y']=y
+    # temp['ca'] = min_cas[0]
+    # temp['pred'] = predicted_prob
+    # temp.to_csv(filename+'.csv')
+
     # color manager
     colors = itertools.cycle(palette)
 
@@ -216,6 +263,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
                                     (PPV, f'@{METRICS_DISPLAY[PPV]}'),
                                     (NPV, f'@{METRICS_DISPLAY[NPV]}'),
                                     (F1_SCORE, f'@{METRICS_DISPLAY[F1_SCORE]}'),
+                                    #(POSPRED, f'@{METRICS_DISPLAY[POSPRED]}'),
                                     ])
     profile_hover = HoverTool(tooltips=[('Declaration rate', '@dr_profile_x'),
                                         ('Profiles', '@dr_profile_lost{safe}'),
@@ -270,7 +318,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None):
 
     # Get tree nodes
     tree_getter = TreeTranscriber(tree=ca_profile, dimensions=[20, 18], min_ratio_leafs=0., metrics=METRICS)
-    nodes, arrows, nodes_text = tree_getter.render_to_bokeh(x=x, y_true=y, y_prob=predicted_prob, min_cas=min_cas)
+    nodes, arrows, nodes_text = tree_getter.render_to_bokeh(x=x_test, y_true=y_test, y_prob=predicted_prob_test,
+                                                            min_cas=min_cas)
     print(f"Get tree values: {int(time.time() - curr_time)}s")
     curr_time = time.time()
 

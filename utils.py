@@ -97,9 +97,10 @@ def get_mdr(Y_target, Y_predicted, predicted_prob, predicted_accuracies):
                                   Y_predicted[predicted_accuracies >= dr_accuracy]
                                   , pos_label=0, zero_division=0)
             bal_acc = (sensitivity + specificity) / 2
+            #pospred = len(Y_predicted[(predicted_accuracies >= dr_accuracy) & (Y_predicted>=1)])
             mdr_values.append({'dr': dr, 'accuracy': acc, 'bal_acc': bal_acc, 'perc_node': perc_node,
                                'sens': sensitivity, 'spec': specificity, 'auc': auc, 'auprc': auprc, 'mcc': mcc,
-                               'ppv': ppv, 'npv': npv, 'f1score': f1score})
+                               'ppv': ppv, 'npv': npv, 'f1score': f1score})  # , 'pospred': pospred
 
     mdr_values = np.array(mdr_values)
 
