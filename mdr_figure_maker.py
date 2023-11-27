@@ -58,7 +58,7 @@ METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPEC
 
 
 def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_threshold=None, split_valid=False,
-                 fixed_tree=''):
+                 fixed_tree=None):
     global THRESHOLD
     if top_threshold:  # For HOMR model
         if top_threshold < 1:
@@ -159,11 +159,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     ca_profile.fit(x_train, ca_rf_values)
 
     # Get fixed tree, if specified
-    if fixed_tree:
-        with open(fixed_tree, 'rb') as f:
-            visual_tree = pickle.load(f)
-    else:
-        visual_tree = ca_profile
+    visual_tree = fixed_tree if fixed_tree else ca_profile
 
     print(f"CA PROFILE: {int(time.time() - curr_time)}s")
     curr_time = time.time()

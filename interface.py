@@ -18,6 +18,9 @@ from utils import filter_dict
 from constants import FontSize, TRUE_LABEL, PRED_LABEL, PRED_PROB
 from mdr_figure_maker import generate_mdr
 
+import pickle
+from tree_structure import VariableTree
+
 curr_doc = curdoc()
 
 # Global variables
@@ -81,7 +84,8 @@ predictive_variables = MultiSelect(title="Chosen predictors (second and third la
 # Tree Upload Button
 def upload_tree(attr, old, new):
     global imported_tree
-    imported_tree = tree_inputer.filename
+    decoded = b64decode(tree_inputer.value)
+    imported_tree = pickle.loads(decoded)
 
 
 tree_inputer = FileInput(title="Upload pkl file for fixed tree", accept=[".pkl"],
