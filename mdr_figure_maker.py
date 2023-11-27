@@ -15,6 +15,7 @@ from bokeh.embed.standalone import file_html
 from bokeh.resources import CDN
 
 import os
+import pickle
 import webbrowser
 
 from sklearn.ensemble import RandomForestRegressor
@@ -56,7 +57,9 @@ METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPEC
                                                       F1_SCORE]]  # , POSPRED
 
 
-def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_threshold=None, split_valid=False):
+def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_threshold=None, split_valid=False,
+                 fixed_tree=''):
+    print(f"{fixed_tree=}")
     global THRESHOLD
     if top_threshold:  # For HOMR model
         if top_threshold < 1:
@@ -155,6 +158,17 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
 
     ca_profile = VariableTree(max_depth=max_depth_profile, min_sample_ratio=slider_minleaf.start)
     ca_profile.fit(x_train, ca_rf_values)
+
+    # Save fitted tree to keep its structure
+    with open(filename + '.pkl', 'wb') as f:
+        pickle.dump(ca_profile, f)
+    # Get fixed tree, if specified
+    if fixed_tree:
+        with open(fixed_tree, 'rb') as f:
+            visual_tree = pickle.load(f)
+    else:
+        visual_tree = ca_profile
+
     print(f"CA PROFILE: {int(time.time() - curr_time)}s")
     curr_time = time.time()
 
@@ -193,13 +207,13 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
                 dr_range.append([dr, curr_min_acc])
         dr_range.append([0, 1.01])
 
-        profiles_curr, profiles_curr_id = ca_profile.get_all_profiles(min_ca=dr_range[0][1], min_samples_ratio=min_perc)
+        profiles_curr, profiles_curr_id = visual_tree.get_all_profiles(min_ca=dr_range[0][1], min_samples_ratio=min_perc)
 
         for id in range(len(dr_range)-1):
             dr, min_ca_curr = dr_range[id]
             _, min_ca_next = dr_range[id+1]
 
-            profiles_next, profiles_next_id = ca_profile.get_all_profiles(min_ca=min_ca_next,
+            profiles_next, profiles_next_id = visual_tree.get_all_profiles(min_ca=min_ca_next,
                                                                           min_samples_ratio=min_perc)
             # print(f"{min_ca_curr} {min_ca_next} {len(profiles_curr)}  {len(profiles_next)} {dr}  {len(min_values_sampratio[min_values_sampratio >= min_ca_curr]) /len(ca_profile_values)}\n")
             if len(profiles_curr) != len(profiles_next):
@@ -317,7 +331,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     plot_tree.grid.visible = False
 
     # Get tree nodes
-    tree_getter = TreeTranscriber(tree=ca_profile, dimensions=[20, 18], min_ratio_leafs=0., metrics=METRICS)
+    tree_getter = TreeTranscriber(tree=visual_tree, dimensions=[20, 18], min_ratio_leafs=0., metrics=METRICS)
     nodes, arrows, nodes_text = tree_getter.render_to_bokeh(x=x_test, y_true=y_test, y_prob=predicted_prob_test,
                                                             min_cas=min_cas)
     print(f"Get tree values: {int(time.time() - curr_time)}s")
