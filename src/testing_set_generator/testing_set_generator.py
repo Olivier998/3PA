@@ -35,7 +35,7 @@ def testing_set_generator():
     # Train model
     # Parameter grid
     param_grid = {
-        'max_depth': range(2, int(np.log2(mimic_train.predictors.shape[0])) + 1)
+        'max_depth': range(2, 8)  # int(np.log2(mimic_train.predictors.shape[0])) + 1
     }
     # Base model
     clf = RandomForestClassifier(random_state=54288, class_weight="balanced")
@@ -49,6 +49,7 @@ def testing_set_generator():
 
     # Get best model
     clf = grid_search.best_estimator_
+    print(grid_search.best_params_)
 
     # Predict
     mimic_train.predict(clf)
