@@ -158,9 +158,6 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     ca_profile = VariableTree(max_depth=max_depth_profile, min_sample_ratio=slider_minleaf.start)
     ca_profile.fit(x_train, ca_rf_values)
 
-    # Save fitted tree to keep its structure
-    with open(filename + '.pkl', 'wb') as f:
-        pickle.dump(ca_profile, f)
     # Get fixed tree, if specified
     if fixed_tree:
         with open(fixed_tree, 'rb') as f:
@@ -633,9 +630,16 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     path = os.path.abspath(filename + '.html')
     if not os.path.exists(path):
         os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    # Save HTML file
     with open(path, 'w') as file:
         file.write(html)
 
+    # Save fitted tree to keep its structure
+    with open(filename + '.pkl', 'wb') as f:
+        pickle.dump(ca_profile, f)
+
+    # Save json file
     path_json = os.path.abspath(filename + '.json')
     with open(path_json, 'w') as file:
         json.dump(mdr_sampratio_dict, file)
