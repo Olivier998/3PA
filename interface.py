@@ -17,12 +17,12 @@ import io
 from utils import filter_dict
 from constants import FontSize, TRUE_LABEL, PRED_LABEL, PRED_PROB
 from mdr_figure_maker import generate_mdr
-import time
 
 curr_doc = curdoc()
 
 # Global variables
 imported_data = pd.DataFrame()
+imported_tree = ""
 selected_dependant_variables = {TRUE_LABEL: '',
                                 # PRED_LABEL: '',
                                 PRED_PROB: ''}
@@ -77,9 +77,23 @@ predictive_variables = MultiSelect(title="Chosen predictors (second and third la
                                            "font-size": FontSize.NORMAL})  # options=imported_data.columns.tolist()
 
 
+# ### Import fixed tree
+# Tree Upload Button
+def upload_tree(attr, old, new):
+    global imported_tree
+    imported_tree = tree_inputer.filename
+
+
+tree_inputer = FileInput(title="Upload pkl file for fixed tree", accept=[".pkl"],
+                         styles={"text-align": "center", "font-size": FontSize.NORMAL})
+tree_inputer.on_change('filename', upload_tree)
+
+
+# ### Import data
 # Data Upload Button
 def upload_data(attr, old, new):
     global imported_data
+
     decoded = b64decode(new)
     imported_data = pd.read_csv(io.StringIO(str(decoded, 'utf-8')))
 
@@ -97,6 +111,7 @@ def upload_data(attr, old, new):
 file_inputer = FileInput(title="Upload data file", accept=[".csv"],
                          styles={"text-align": "center", "font-size": FontSize.NORMAL})
 file_inputer.on_change('value', upload_data)
+
 with open("refresh.svg") as my_file:
     icon_test = my_file.read()
 
@@ -265,7 +280,8 @@ def generate_mdr_action():
                  predicted_prob=imported_data[
                      selected_dependant_variables[PRED_PROB]].to_numpy(),
                  pos_class_weight=slider_weight.value,
-                 filename=txt_filename.value)
+                 filename=txt_filename.value,
+                 fixed_tree=imported_tree)
     bttn_loading.visible = False
 
 
@@ -283,7 +299,7 @@ layout_output = layout(
     [
         [tool_header],
         [column(column(data_import_header,
-                       row(file_inputer, sel_true_label, sel_pred_prob,  # sel_pred_label
+                       row(file_inputer, sel_true_label, sel_pred_prob, tree_inputer,  # sel_pred_label
                            sizing_mode="stretch_width"),
                        bttn_update_glob_res,
                        warning_bttn_update_glob_res,
