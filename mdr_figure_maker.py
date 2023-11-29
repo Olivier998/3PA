@@ -58,7 +58,7 @@ METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPEC
 
 
 def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_threshold=None, split_valid=False,
-                 fixed_tree=None):
+                 fixed_tree=None, return_infos=False):
     global THRESHOLD
     if top_threshold:  # For HOMR model
         if top_threshold < 1:
@@ -641,6 +641,9 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
         json.dump(mdr_sampratio_dict, file)
 
     webbrowser.open(url=path)
+
+    if return_infos:
+        return ca_profile, mdr_sampratio_dict['values'][index_current_data]
 
 
 if __name__ == '__main__':
