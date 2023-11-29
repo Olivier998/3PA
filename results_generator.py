@@ -36,7 +36,7 @@ def save_mdr_metrics(mdr_curves, df_name):
     for metric_name in metrics_names:
         metrics_vals[metric_name] = mdr_curves[metric_name][0]
 
-    auc_mins = [perc/100 for perc in range(80, 96)]
+    auc_mins = [perc / 100 for perc in range(80, 96)]
     for auc_min in auc_mins:
         auc_index = -1
         for index, element in enumerate(mdr_curves["Auc"]):
@@ -123,28 +123,28 @@ def produce_results(df_mimic, df_eicu):
     # Get training metrics
     y_0_pred = clf.predict(df_0_score)
     y_0_prob = clf.predict_proba(df_0_score)[:, 1]
-    #save_metrics(y_true=y_0, y_pred=y_0_pred, y_prob=y_0_prob, df_name="Train")
+    # save_metrics(y_true=y_0, y_pred=y_0_pred, y_prob=y_0_prob, df_name="Train")
 
     # Validation metrics
     y_0_valid_pred = clf.predict(df_0_valid_score)
     y_0_valid_prob = clf.predict_proba(df_0_valid_score)[:, 1]
-    #save_metrics(y_true=y_0_valid, y_pred=y_0_valid_pred, y_prob=y_0_valid_prob, df_name="Validation")
+    # save_metrics(y_true=y_0_valid, y_pred=y_0_valid_pred, y_prob=y_0_valid_prob, df_name="Validation")
 
     # MIMIC 2014 metrics
     y_1_pred = clf.predict(df_1_score)
     y_1_prob = clf.predict_proba(df_1_score)[:, 1]
-    #save_metrics(y_true=y_1, y_pred=y_1_pred, y_prob=y_1_prob, df_name="MIMIC2014")
+    # save_metrics(y_true=y_1, y_pred=y_1_pred, y_prob=y_1_prob, df_name="MIMIC2014")
 
     # MIMIC 2017 metrics
     y_2_pred = clf.predict(df_2_score)
     y_2_prob = clf.predict_proba(df_2_score)[:, 1]
-    #save_metrics(y_true=y_2, y_pred=y_2_pred, y_prob=y_2_prob, df_name="MIMIC2017")
+    # save_metrics(y_true=y_2, y_pred=y_2_pred, y_prob=y_2_prob, df_name="MIMIC2017")
 
     # eICU metrics
     df_eicu_score['prediction'] = clf.predict(df_eicu_score.loc[:, df_0_score.columns])
     df_eicu_score['probability'] = clf.predict_proba(df_eicu_score.loc[:, df_0_score.columns])[:, 1]
     df_eicu_score['y_true'] = y_eicu
-    #save_metrics(y_true=y_eicu, y_pred=df_eicu_score['prediction'], y_prob=df_eicu_score['probability'], df_name="eICU")
+    # save_metrics(y_true=y_eicu, y_pred=df_eicu_score['prediction'], y_prob=df_eicu_score['probability'], df_name="eICU")
 
     hosp_id = np.unique(df_eicu['hospitalid'])
 
@@ -159,6 +159,21 @@ def produce_results(df_mimic, df_eicu):
     if not FIXED_TREE:
         fixed_tree = None
 
+    # MIMIC 2008 (50%) & MIMIC 2014 (50%)
+    df_0_half = df_0_valid_score.sample(frac=0.5, random_state=54288)
+    df_1_half = df_1_score.sample(frac=0.5, random_state=54288)
+
+    y_01 = np.append(y_0_valid[df_0_half.index], y_1[df_1_half.index])
+    y_01_prob = np.append(y_0_valid_prob[df_0_half.index], y_1_prob[df_1_half.index])
+    df_01_score = pd.concat([df_0_half, df_1_half], ignore_index=True)
+
+    hosp_class_imbalance = len(y_01[y_01 == pos_label]) / len(y_01)
+    _, mdr_01 = generate_mdr(x=df_01_score, y=y_01, predicted_prob=y_01_prob,
+                             pos_class_weight=1 - round(hosp_class_imbalance, 2), filename=saved_files + "mimic_0814",
+                             fixed_tree=fixed_tree, return_infos=True)
+
+    save_mdr_metrics(mdr_01, 'MIMIC0814')
+
     # MIMIC 2014
     hosp_class_imbalance = len(y_1[y_1 == pos_label]) / len(y_1)
     _, mdr_1 = generate_mdr(x=df_1_score, y=y_1, predicted_prob=y_1_prob,
@@ -166,6 +181,21 @@ def produce_results(df_mimic, df_eicu):
                             fixed_tree=fixed_tree, return_infos=True)
 
     save_mdr_metrics(mdr_1, 'MIMIC2014')
+
+    # MIMIC 2014 (50%) & MIMIC 2017 (50%)
+    df_1_otherhalf = df_1_score.loc[~df_1_score.index.isin(df_1_half.index)]
+    df_2_half = df_2_score.sample(frac=0.5, random_state=54288)
+
+    y_12 = np.append(y_1[df_1_otherhalf.index], y_2[df_2_half.index])
+    y_12_prob = np.append(y_1_prob[df_1_otherhalf.index], y_2_prob[df_2_half.index])
+    df_12_score = pd.concat([df_1_otherhalf, df_2_half], ignore_index=True)
+
+    hosp_class_imbalance = len(y_01[y_01 == pos_label]) / len(y_01)
+    _, mdr_01 = generate_mdr(x=df_12_score, y=y_12, predicted_prob=y_12_prob,
+                             pos_class_weight=1 - round(hosp_class_imbalance, 2), filename=saved_files + "mimic_1417",
+                             fixed_tree=fixed_tree, return_infos=True)
+
+    save_mdr_metrics(mdr_01, 'MIMIC1417')
 
     # MIMIC 2017
     hosp_class_imbalance = len(y_2[y_2 == pos_label]) / len(y_2)
@@ -185,7 +215,7 @@ def produce_results(df_mimic, df_eicu):
             hosp_y_pred = df_hid.pop('prediction').to_numpy()
 
             # Save metrics for specific hospital
-            #save_metrics(y_true=hosp_y, y_pred=hosp_y_pred, y_prob=hosp_y_prob, df_name='eicu_' + str(hid))
+            # save_metrics(y_true=hosp_y, y_pred=hosp_y_pred, y_prob=hosp_y_prob, df_name='eicu_' + str(hid))
 
             hosp_filename = saved_files + 'meicu/hosp_' + str(hid)
             hosp_class_imbalance = len(hosp_y[hosp_y == pos_label]) / len(hosp_y)
