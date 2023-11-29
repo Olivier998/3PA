@@ -13,7 +13,7 @@ from mdr_figure_maker import generate_mdr
 FIXED_TREE = True
 pos_label = 1
 y_true_str = 'y_true'
-saved_files = 'hosp/new/'
+saved_files = 'hosp/1129/'
 all_metrics = pd.DataFrame()
 
 
@@ -44,7 +44,7 @@ def save_mdr_metrics(mdr_curves, df_name):
                 auc_index = index
                 break
         min_dr = 0 if auc_index == -1 else mdr_curves["DR"][auc_index]
-        metrics_vals[f'DR-auc{min_dr}']
+        metrics_vals[f'DR-auc{auc_min}'] = min_dr
     all_metrics = pd.concat([all_metrics, pd.DataFrame([metrics_vals])], ignore_index=True)
 
 
@@ -141,7 +141,7 @@ def produce_results(df_mimic, df_eicu):
     #save_metrics(y_true=y_2, y_pred=y_2_pred, y_prob=y_2_prob, df_name="MIMIC2017")
 
     # eICU metrics
-    df_eicu_score['prediction'] = clf.predict(df_eicu_score.loc[:, df_0_score.columns])[:, 1]
+    df_eicu_score['prediction'] = clf.predict(df_eicu_score.loc[:, df_0_score.columns])
     df_eicu_score['probability'] = clf.predict_proba(df_eicu_score.loc[:, df_0_score.columns])[:, 1]
     df_eicu_score['y_true'] = y_eicu
     #save_metrics(y_true=y_eicu, y_pred=df_eicu_score['prediction'], y_prob=df_eicu_score['probability'], df_name="eICU")
@@ -178,7 +178,7 @@ def produce_results(df_mimic, df_eicu):
     for hid in hosp_id:
         df_hid = df_eicu_score[df_eicu_score['hospitalid'] == hid].drop(columns=['hospitalid']).reset_index(drop=True)
         if df_hid.shape[0] >= 200:
-            df_hid.to_csv(f'../../../data/mimic_mimic/meicu/df_m0_eicu{hid}.csv', index=False)
+            # df_hid.to_csv(f'../../../data/mimic_mimic/meicu/df_m0_eicu{hid}.csv', index=False)
 
             hosp_y = df_hid.pop(y_true_str).to_numpy()  # df_hid[y_true_str].to_numpy()
             hosp_y_prob = df_hid.pop('probability').to_numpy()
