@@ -198,9 +198,9 @@ def produce_results(df_mimic, df_eicu):
 
 
 if __name__ == "__main__":
-    df = pd.read_csv("../../../data/sapsii/mimic_filtered_data.csv")
+    df = pd.read_csv("../../data/sapsii/mimic_filtered_data.csv")
     df = df.drop(columns=['stay_id', 'hospitalid'])
 
-    df_eicu = pd.read_csv("../../../data/sapsii/eicu_filtered_data.csv")
+    df_eicu = pd.read_csv("../../data/sapsii/eicu_filtered_data.csv")
     df_eicu = df_eicu.drop(columns=['stay_id'])
     produce_results(df_mimic=df, df_eicu=df_eicu)
