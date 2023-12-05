@@ -34,7 +34,7 @@ def save_mdr_metrics(mdr_curves, df_name):
     metrics_vals = {'df': df_name}
     metrics_names = ["Acc", "Bal_Acc", "sens", "spec", "Auc", "Auprc"]
     for metric_name in metrics_names:
-        metrics_vals[metric_name] = mdr_curves[metric_name][0]
+        metrics_vals[metric_name] = round(mdr_curves[metric_name][0], 3)
 
     auc_mins = [perc / 100 for perc in range(80, 96)]
     for auc_min in auc_mins:
@@ -205,25 +205,25 @@ def produce_results(df_mimic, df_eicu):
     save_mdr_metrics(mdr_2, "MIMIC2017")
 
     # eICU
-    for hid in hosp_id:
-        df_hid = df_eicu_score[df_eicu_score['hospitalid'] == hid].drop(columns=['hospitalid']).reset_index(drop=True)
-        if df_hid.shape[0] >= 200:
-            # df_hid.to_csv(f'../../../data/mimic_mimic/meicu/df_m0_eicu{hid}.csv', index=False)
-
-            hosp_y = df_hid.pop(y_true_str).to_numpy()  # df_hid[y_true_str].to_numpy()
-            hosp_y_prob = df_hid.pop('probability').to_numpy()
-            hosp_y_pred = df_hid.pop('prediction').to_numpy()
-
-            # Save metrics for specific hospital
-            # save_metrics(y_true=hosp_y, y_pred=hosp_y_pred, y_prob=hosp_y_prob, df_name='eicu_' + str(hid))
-
-            hosp_filename = saved_files + 'meicu/hosp_' + str(hid)
-            hosp_class_imbalance = len(hosp_y[hosp_y == pos_label]) / len(hosp_y)
-
-            _, mdr_hosp = generate_mdr(x=df_hid, y=hosp_y, predicted_prob=hosp_y_prob,
-                                       pos_class_weight=1 - round(hosp_class_imbalance, 2), filename=hosp_filename,
-                                       split_valid=False, fixed_tree=fixed_tree, return_infos=True)
-            save_mdr_metrics(mdr_hosp, f"eICU_{hid}")
+    # for hid in hosp_id:
+    #     df_hid = df_eicu_score[df_eicu_score['hospitalid'] == hid].drop(columns=['hospitalid']).reset_index(drop=True)
+    #     if df_hid.shape[0] >= 200:
+    #         # df_hid.to_csv(f'../../../data/mimic_mimic/meicu/df_m0_eicu{hid}.csv', index=False)
+    #
+    #         hosp_y = df_hid.pop(y_true_str).to_numpy()  # df_hid[y_true_str].to_numpy()
+    #         hosp_y_prob = df_hid.pop('probability').to_numpy()
+    #         hosp_y_pred = df_hid.pop('prediction').to_numpy()
+    #
+    #         # Save metrics for specific hospital
+    #         # save_metrics(y_true=hosp_y, y_pred=hosp_y_pred, y_prob=hosp_y_prob, df_name='eicu_' + str(hid))
+    #
+    #         hosp_filename = saved_files + 'meicu/hosp_' + str(hid)
+    #         hosp_class_imbalance = len(hosp_y[hosp_y == pos_label]) / len(hosp_y)
+    #
+    #         _, mdr_hosp = generate_mdr(x=df_hid, y=hosp_y, predicted_prob=hosp_y_prob,
+    #                                    pos_class_weight=1 - round(hosp_class_imbalance, 2), filename=hosp_filename,
+    #                                    split_valid=False, fixed_tree=fixed_tree, return_infos=True)
+    #         save_mdr_metrics(mdr_hosp, f"eICU_{hid}")
     all_metrics.to_csv(saved_files + "results.csv", index=False)
 
 

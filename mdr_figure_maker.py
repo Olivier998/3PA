@@ -37,6 +37,7 @@ BAL_ACC = 'bal_acc'
 F1_SCORE = 'f1score'
 MCC = 'mcc'
 MEAN_CA = 'mean_ca'
+MEAN_IPC = 'mean_ipc'
 NPV = 'npv'
 PERC_POP = 'perc_pop'
 PERC_NODE = 'perc_node'
@@ -48,11 +49,11 @@ DR = 'dr'
 # POSPRED = 'pospred'
 
 METRICS_DISPLAY = {PERC_POS: '% positive', AUC: 'Auc', AUPRC: 'Auprc', BAL_ACC: 'Bal_Acc', MEAN_CA: 'Mean CA',
-                   PERC_POP: '% pop', PERC_NODE: '% node', SENSITIVITY: 'sens',
+                   MEAN_IPC: 'Mean IPC', PERC_POP: '% pop', PERC_NODE: '% node', SENSITIVITY: 'sens',
                    SPECIFICITY: 'spec', DR: 'DR', ACC: 'Acc', MCC: 'Mcc', PPV: 'PPV', NPV: 'NPV', F1_SCORE: 'F1Score'}
                    #POSPRED: POSPRED}
 
-METRICS = [PERC_POS, BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, MEAN_CA, PERC_POP, PERC_NODE]
+METRICS = [PERC_POS, BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, MEAN_CA, MEAN_IPC, PERC_POP, PERC_NODE]
 METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, AUPRC, MCC, PPV, NPV,
                                                       F1_SCORE]]  # , POSPRED
 
@@ -159,7 +160,11 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     ca_profile.fit(x_train, ca_rf_values)
 
     # Get fixed tree, if specified
-    visual_tree = fixed_tree if fixed_tree else ca_profile
+    if fixed_tree:
+        visual_tree = fixed_tree
+        visual_tree.re_fit(x_train, ca_rf_values)
+    else:
+        visual_tree = ca_profile
 
     print(f"CA PROFILE: {int(time.time() - curr_time)}s")
     curr_time = time.time()
@@ -323,7 +328,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     plot_tree.grid.visible = False
 
     # Get tree nodes
-    tree_getter = TreeTranscriber(tree=visual_tree, dimensions=[20, 18], min_ratio_leafs=0., metrics=METRICS)
+    tree_getter = TreeTranscriber(tree=visual_tree, min_ratio_leafs=0., metrics=METRICS)
     nodes, arrows, nodes_text = tree_getter.render_to_bokeh(x=x_test, y_true=y_test, y_prob=predicted_prob_test,
                                                             min_cas=min_cas)
     print(f"Get tree values: {int(time.time() - curr_time)}s")

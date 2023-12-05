@@ -1,4 +1,5 @@
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.utils.validation import check_is_fitted
 from pandas import DataFrame, Series
 import numpy as np
 
@@ -11,15 +12,23 @@ class VariableTree:
             min_sample_ratio = 1
         else:
             min_sample_ratio = min_sample_ratio / 100
-        self.dtr = DecisionTreeRegressor(max_depth=max_depth, min_samples_leaf=min_sample_ratio, random_state=54288)
+        self.__dtr = DecisionTreeRegressor(max_depth=max_depth, min_samples_leaf=min_sample_ratio, random_state=54288)
         self.features = None
         self.nb_nodes = 0
 
     def fit(self, X, y):
-        self.dtr.fit(X, y)
+        self.__dtr.fit(X, y)
         self.features = X.columns
 
         self.head = self.add_children(0, X, y)
+
+    def re_fit(self, X, y):
+        if self.head is None:  # If the model if not already fitted
+            self.fit(X, y)
+
+        else:
+            n0 = X.shape[0]
+            self.re_fit_children(self.head, X, y, n0=n0)
 
     def get_all_profiles(self, min_ca=0, min_samples_ratio=0):
         profiles, nodes_numbers = self.head.get_profile(min_samples_ratio=min_samples_ratio, min_ca=min_ca,
@@ -27,8 +36,13 @@ class VariableTree:
         return profiles, nodes_numbers
 
     def predict(self, X, depth=None, min_samples_ratio=0):
-        # if depth is None and min_samples_ratio == 0:
-        #    return self.dtr.predict(X)
+        """
+
+        :param X:
+        :param depth:
+        :param min_samples_ratio:
+        :return:
+        """
 
         def node_predict(_depth, _min_samples_ratio):
             def _node_predict(X):
@@ -42,13 +56,13 @@ class VariableTree:
     def add_children(self, node_id, X, y):
         self.nb_nodes += 1
 
-        left_child = self.dtr.tree_.children_left[node_id]
-        right_child = self.dtr.tree_.children_right[node_id]
+        left_child = self.__dtr.tree_.children_left[node_id]
+        right_child = self.__dtr.tree_.children_right[node_id]
 
         node_value = y.mean()
         node_max = y.max()
 
-        node_samples_ratio = self.dtr.tree_.n_node_samples[node_id] / self.dtr.tree_.n_node_samples[0] * 100
+        node_samples_ratio = self.__dtr.tree_.n_node_samples[node_id] / self.__dtr.tree_.n_node_samples[0] * 100
 
         # If we are at a leaf
         if left_child == -1:
@@ -56,8 +70,8 @@ class VariableTree:
                               node_id=self.nb_nodes)
             return curr_node
 
-        node_thresh = self.dtr.tree_.threshold[node_id]
-        node_feature_id = self.dtr.tree_.feature[node_id]
+        node_thresh = self.__dtr.tree_.threshold[node_id]
+        node_feature_id = self.__dtr.tree_.feature[node_id]
         node_feature = self.features[node_feature_id]
 
         curr_node = _Node(value=node_value,
@@ -77,9 +91,28 @@ class VariableTree:
 
         return curr_node
 
+    def re_fit_children(self, curr_node, X, y, n0):
+        node_value = y.mean() if len(y)>0 else np.nan
+        node_max = y.max() if len(y)>0 else np.nan
+        node_samples_ratio = X.shape[0] / n0 * 100
+
+        curr_node.re_fit(value=node_value, value_max=node_max, samples_ratio=node_samples_ratio)
+
+        if curr_node.c_left is not None:
+            node_feature = curr_node.feature
+            node_thresh = curr_node.threshold
+            self.re_fit_children(curr_node.c_left,
+                                 X=X.loc[X[node_feature] <= node_thresh],
+                                 y=y[X[node_feature] <= node_thresh],
+                                 n0=n0)
+            self.re_fit_children(curr_node.c_right,
+                                 X=X.loc[X[node_feature] > node_thresh],
+                                 y=y[X[node_feature] > node_thresh],
+                                 n0=n0)
+
     @property
     def max_depth(self):
-        return self.dtr.tree_.max_depth
+        return self.__dtr.tree_.max_depth
 
 
 class _Node:
@@ -94,6 +127,11 @@ class _Node:
         self.feature = feature
         self.feature_id = feature_id
         self.node_id = node_id
+
+    def re_fit(self, value, value_max, samples_ratio):
+        self.value = value
+        self.value_max = value_max
+        self.samples_ratio = samples_ratio
 
     def get_profile(self, min_samples_ratio, min_ca, previous_thresh=""):
         curr_profile_child = []

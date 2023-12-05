@@ -13,8 +13,10 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 class TreeTranscriber:
 
-    def __init__(self, tree: VariableTree, dimensions=[20, 16], min_ratio_leafs: float = 0.5, THRESHOLD=0.5,
+    def __init__(self, tree: VariableTree, dimensions=[20, None], min_ratio_leafs: float = 0.5, THRESHOLD=0.5,
                  metrics=None):
+        if dimensions[1] is None and metrics is not None:
+            dimensions[1] = round(2.5 * len(metrics))
         self.tree = tree
         self.width = dimensions[0]
         self.height = dimensions[1]
@@ -41,7 +43,7 @@ class TreeTranscriber:
 
         for samp_ratio in min_cas:
             mdr_values = mdr_tool.get_metrics(Y_target=y_true, Y_predicted=y_pred, Y_prob=y_prob,
-                                              pred_cas=min_cas[samp_ratio], samp_ratio=samp_ratio)
+                                              pred_cas=min_cas[samp_ratio], samp_ratio=samp_ratio, curr_node=curr_node)
             mdr_dict = {'dr': [dic['dr'] for dic in mdr_values],
                         'metrics': [{key: value for key, value in dic.items() if key != 'dr'} for dic in mdr_values]}
             values_sampratio_dr['samp_ratio'].append(samp_ratio)
@@ -58,7 +60,7 @@ class TreeTranscriber:
                                          'samp_ratio': curr_node.samples_ratio},
                                         values_sampratio_dr])
 
-        node_text = [{'x': pos_x - 0.45 * self.width, 'y': pos_y + (0.375 - 0.12 * idx) * self.height, 'text': '',
+        node_text = [{'x': pos_x - 0.45 * self.width, 'y': pos_y + (0.375 - 1/(1 + len(self.metrics)) * idx) * self.height, 'text': '',
                       'metric': metric_name, 'text_font_style': 'italic' if metric_name in ITALIC_VARS else 'normal',
                       'node_id': curr_node.node_id, 'curr_depth': curr_depth}
                      for idx, metric_name in enumerate(self.metrics)]
@@ -68,7 +70,7 @@ class TreeTranscriber:
 
         # Add split criteria
         node_text.append({'x': pos_x - 0.45 * self.width, 'y': pos_y - 0.75 * self.height,
-                          'text': f'{curr_node.feature} <= {curr_node.threshold}',
+                          'text': f'{curr_node.feature} <= {round(curr_node.threshold, 4)}',
                           'text_font_style': 'normal',
                           'metric': 'split', 'node_id': curr_node.node_id, 'curr_depth': curr_depth})
 
@@ -160,7 +162,7 @@ class MDR:
         #                        dr in range(100, 0, -1)} for samp_ratio in pred_cas}
         self.precision = precision
 
-    def get_metrics(self, Y_target, Y_predicted, Y_prob, pred_cas, samp_ratio):
+    def get_metrics(self, Y_target, Y_predicted, Y_prob, pred_cas, samp_ratio, curr_node):
         # unique_accuracies = np.sort(np.unique(np.round(pred_cas, 3)))[::-1]
         # sorted_accuracies = np.sort(pred_cas)[::-1]
         mdr_values = []
@@ -200,12 +202,14 @@ class MDR:
                 mean_ca = np.mean(pred_cas[pred_cas >= dr_accuracy]) * 100 if \
                     pred_cas[pred_cas >= dr_accuracy].size > 0 \
                     else np.NaN
+                mean_ipc = curr_node.value * 100
                 pos_class_occurence = np.sum(Y_target[pred_cas >= dr_accuracy]) / \
                                       len(Y_target[pred_cas >= dr_accuracy]) * 100
                 mdr_values.append({'dr': dr / 100, 'accuracy': acc, 'bal_acc': bal_acc,
                                    'sens': sensitivity, 'spec': specificity, 'perc_node': perc_node,
                                    'perc_pop': perc_pop, 'auc': auc, 'auprc': auprc, 'mean_ca': mean_ca,
-                                   'pos_perc': pos_class_occurence, 'mcc': mcc, 'f1score': f1score})
+                                   'mean_ipc': mean_ipc, 'pos_perc': pos_class_occurence, 'mcc': mcc,
+                                   'f1score': f1score})
 
         for i, values in enumerate(mdr_values):
             for metric in values:
