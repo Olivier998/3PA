@@ -1,6 +1,6 @@
 from bokeh.layouts import row, column, layout
 from bokeh.models import Div, Slider, LabelSet, ColumnDataSource, HoverTool, WheelZoomTool, ResetTool, SaveTool, \
-    PanTool, Button, TapTool
+    PanTool, Button, TapTool, Select
 from bokeh.plotting import figure
 from bokeh.models.callbacks import CustomJS
 
@@ -51,7 +51,7 @@ DR = 'dr'
 METRICS_DISPLAY = {PERC_POS: '% positive', AUC: 'Auc', AUPRC: 'Auprc', BAL_ACC: 'Bal_Acc', MEAN_CA: 'Mean CA',
                    MEAN_IPC: 'Mean IPC', PERC_POP: '% pop', PERC_NODE: '% node', SENSITIVITY: 'sens',
                    SPECIFICITY: 'spec', DR: 'DR', ACC: 'Acc', MCC: 'Mcc', PPV: 'PPV', NPV: 'NPV', F1_SCORE: 'F1Score'}
-                   #POSPRED: POSPRED}
+# POSPRED: POSPRED}
 
 METRICS = [PERC_POS, BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, MEAN_CA, MEAN_IPC, PERC_POP, PERC_NODE]
 METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, AUPRC, MCC, PPV, NPV,
@@ -117,15 +117,24 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
                              sizing_mode="stretch_width",
                              styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
                                      "width": "75%", "align-self": "center"})
+    select_transp_options = ["Presence", "Percentage", "Mean IPC"]
+    if fixed_tree is not None:
+        select_transp_options += ["VS Previous"]
+    select_line_transparency = Select(title="Profiles transparency",
+                                      value="Presence",
+                                      options=select_transp_options,
+                                      sizing_mode="stretch_width",
+                                      styles={"text-align": "center", "font-size": FontSize.SUB_TITLE,
+                                              "padding": "0.5vw", "width": "75%", "align-self": "center"})
     bttn_save_profiles = Button(label='Save Profiles',
                                 align='center',
-                                #styles={'width': '15vw', 'height': '3vw'},
+                                # styles={'width': '15vw', 'height': '3vw'},
                                 stylesheets=[".bk-btn-default {font-size: 1vw; font-weight: bold;}"])
 
     # Section to train misclassification model
     # y_pred_train = np.array([1 if y_score_i >= THRESHOLD else 0 for y_score_i in predicted_prob_train])
     error_prob = 1 - np.abs(y_train - predicted_prob_train)
-    sample_weight = np.array([pos_class_weight / (1-THRESHOLD) if yi == 1 else
+    sample_weight = np.array([pos_class_weight / (1 - THRESHOLD) if yi == 1 else
                               (1 - pos_class_weight) / THRESHOLD for yi in y_train])
     # np.array([pos_class_weight if yi == 1 else 1 - pos_class_weight for yi in y])
 
@@ -198,20 +207,21 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
         dr_range = []
         prev_min_acc = -1
         for dr in range(100, 0, -1):
-            curr_min_acc = sorted_accuracies[int(len(sorted_accuracies) * (1 - dr/100))]
+            curr_min_acc = sorted_accuracies[int(len(sorted_accuracies) * (1 - dr / 100))]
             if prev_min_acc < curr_min_acc:
                 prev_min_acc = curr_min_acc
                 dr_range.append([dr, curr_min_acc])
         dr_range.append([0, 1.01])
 
-        profiles_curr, profiles_curr_id = visual_tree.get_all_profiles(min_ca=dr_range[0][1], min_samples_ratio=min_perc)
+        profiles_curr, profiles_curr_id = visual_tree.get_all_profiles(min_ca=dr_range[0][1],
+                                                                       min_samples_ratio=min_perc)
 
-        for id in range(len(dr_range)-1):
+        for id in range(len(dr_range) - 1):
             dr, min_ca_curr = dr_range[id]
-            _, min_ca_next = dr_range[id+1]
+            _, min_ca_next = dr_range[id + 1]
 
             profiles_next, profiles_next_id = visual_tree.get_all_profiles(min_ca=min_ca_next,
-                                                                          min_samples_ratio=min_perc)
+                                                                           min_samples_ratio=min_perc)
             # print(f"{min_ca_curr} {min_ca_next} {len(profiles_curr)}  {len(profiles_next)} {dr}  {len(min_values_sampratio[min_values_sampratio >= min_ca_curr]) /len(ca_profile_values)}\n")
             if len(profiles_curr) != len(profiles_next):
                 lost_profiles = list(set(profiles_curr) - set(profiles_next))
@@ -244,13 +254,12 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
         mdr_sampratio_dict['samp_ratio'].append(min_perc)
         mdr_sampratio_dict['values'].append(mdr_dict)
 
-        print(f"get mdr {min_perc}: {int(time.time() - curr_time)}s")
-        curr_time = time.time()
+        # print(f"get mdr {min_perc}: {int(time.time() - curr_time)}s")
+        # curr_time = time.time()
 
     mdr_sampratio_data = ColumnDataSource(data=mdr_sampratio_dict)
     index_current_data = mdr_sampratio_dict['samp_ratio'].index(slider_minleaf.value)
     mdr_current_data = ColumnDataSource(data=mdr_sampratio_dict['values'][index_current_data])
-
 
     # temp
     # from copy import deepcopy
@@ -274,7 +283,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
                                     (PPV, f'@{METRICS_DISPLAY[PPV]}'),
                                     (NPV, f'@{METRICS_DISPLAY[NPV]}'),
                                     (F1_SCORE, f'@{METRICS_DISPLAY[F1_SCORE]}'),
-                                    #(POSPRED, f'@{METRICS_DISPLAY[POSPRED]}'),
+                                    # (POSPRED, f'@{METRICS_DISPLAY[POSPRED]}'),
                                     ])
     profile_hover = HoverTool(tooltips=[('Declaration rate', '@dr_profile_x'),
                                         ('Profiles', '@dr_profile_lost{safe}'),
@@ -302,7 +311,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
                              tools=[profile_hover, profile_tap],
                              stylesheets=[":host {height: 25vh;}"])
 
-    #plot_metrics_dr.line(x='dr_profile_x', y='dr_profile_y_line', legend_label='Declaration Rate', color='black',
+    # plot_metrics_dr.line(x='dr_profile_x', y='dr_profile_y_line', legend_label='Declaration Rate', color='black',
     #                     line_width=1, source=mdr_current_data)
     plot_metrics_dr.triangle_dot(x='dr_profile_x', y='dr_profile_y', legend_label='Declaration Rate', color='black',
                                  line_width=3, source=mdr_current_data)
@@ -328,7 +337,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     plot_tree.grid.visible = False
 
     # Get tree nodes
-    tree_getter = TreeTranscriber(tree=visual_tree, min_ratio_leafs=0., metrics=METRICS)
+    tree_getter = TreeTranscriber(tree=visual_tree, min_ratio_leafs=0., metrics=METRICS, previous_tree=fixed_tree)
     nodes, arrows, nodes_text = tree_getter.render_to_bokeh(x=x_test, y_true=y_test, y_prob=predicted_prob_test,
                                                             min_cas=min_cas)
     print(f"Get tree values: {int(time.time() - curr_time)}s")
@@ -388,6 +397,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
                         metric_display = METRICS_DISPLAY[curr_metric]
                         metric_value = node_values['metrics'][id_min_dr][curr_metric]
                         nodes_labels.data['text'][text_id] = f'{metric_display} = {metric_value}'
+            if select_line_transparency.value != "Presence":
+                node.line_alpha = node_values['metrics'][id_min_dr]['transparency'][select_line_transparency.value]
 
     print(f"PLOT NODES: {int(time.time() - curr_time)}s")
     curr_time = time.time()
@@ -462,20 +473,6 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
                 var remove_node = false;
             }
         }
-        for (var arr_id=0; arr_id < arrows.length; arr_id++)
-        {
-            if (arrows[arr_id].tags[0]['node_id'] == nodes[i].tags[0]['node_id'])
-            {
-                if (remove_node)
-                {
-                    arrows[arr_id].line_alpha = 0.25;
-                }
-                else
-                {
-                    arrows[arr_id].line_alpha = 1;
-                }
-            }
-        }
         
         if (remove_node)
         {  // Remove text of the node
@@ -490,7 +487,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
         }
         else 
         {
-            nodes[i].line_alpha = 1;
+            nodes[i].line_alpha = node_values['metrics'][id_min_dr]['transparency'][select_line_transparency.value];
+            //nodes[i].line_alpha = 1;
             for (var j=0; j< labels.data['text'].length; j++)
             {
                 if (nodes[i].tags[0]['node_id'] == labels.data['node_id'][j])
@@ -509,6 +507,20 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
                 }
             }
         }
+        for (var arr_id=0; arr_id < arrows.length; arr_id++)
+        {
+            if (arrows[arr_id].tags[0]['node_id'] == nodes[i].tags[0]['node_id'])
+            {
+                if (remove_node)
+                {
+                    arrows[arr_id].line_alpha = 0.25;
+                }
+                else
+                {
+                    arrows[arr_id].line_alpha = node_values['metrics'][id_min_dr]['transparency'][select_line_transparency.value];
+                }
+            }
+        }
     }
     labels.change.emit();
     """
@@ -516,13 +528,15 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     callback_dr = CustomJS(args=dict(slider_samp_ratio=slider_minleaf, slider_dr=slider_dr,
                                      slider_maxdepth=slider_maxdepth,
                                      nodes=nodes, labels=nodes_labels, arrows=arrows,
-                                     metrics_display=METRICS_DISPLAY),
+                                     metrics_display=METRICS_DISPLAY,
+                                     select_line_transparency=select_line_transparency),
                            code=str_update_profile)
     callback_samp_ratio = CustomJS(args=dict(src=mdr_sampratio_data, curr=mdr_current_data,
                                              slider_maxdepth=slider_maxdepth,
                                              slider_samp_ratio=slider_minleaf, slider_dr=slider_dr,
                                              nodes=nodes, labels=nodes_labels, arrows=arrows,
-                                             metrics_display=METRICS_DISPLAY),
+                                             metrics_display=METRICS_DISPLAY,
+                                             select_line_transparency=select_line_transparency),
                                    code=str_update_profile + str_update_mdr)
 
     profile_tap_action = CustomJS(args=dict(curr=mdr_current_data, nodes=nodes),
@@ -551,11 +565,12 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     # set callback actions
     slider_minleaf.js_on_change('value', callback_samp_ratio)
     slider_dr.js_on_change('value', callback_dr)
+    select_line_transparency.js_on_change('value', callback_dr)
     slider_maxdepth.js_on_change('value', callback_samp_ratio)
     mdr_current_data.selected.js_on_change('indices', profile_tap_action)
 
     bttn_save_profiles.js_on_click(CustomJS(args=dict(curr=mdr_current_data, slider_samp_ratio=slider_minleaf,
-                                                      filename=filename+'_profiles'),
+                                                      filename=filename + '_profiles'),
                                             code="""
     var csv_data = "DR,Profiles\\n";
             
@@ -583,7 +598,6 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
                 link.dispatchEvent(new MouseEvent('click'))
             }
     """))
-
 
     # We set the two box (extracted profiles and MDR curves)
     outline_boxs = row(
@@ -617,6 +631,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
         row(slider_dr,
             slider_maxdepth,
             slider_minleaf,
+            select_line_transparency,
             bttn_save_profiles, sizing_mode="stretch_width"),
         [outline_boxs],
     ],
@@ -660,8 +675,8 @@ if __name__ == '__main__':
     y = np.array([1, 1, 0, 0])
     y_pred = np.array([0.98, 0.45, 0.35, 0.02])
 
-    #df = pd.read_csv('simulated_data.csv')
-    #x=df[['x1', 'x2']]
-    #y=df['y_true'].to_numpy()
-    #y_pred=df['pred_prob'].to_numpy()
+    # df = pd.read_csv('simulated_data.csv')
+    # x=df[['x1', 'x2']]
+    # y=df['y_true'].to_numpy()
+    # y_pred=df['pred_prob'].to_numpy()
     generate_mdr(x, y, y_pred)

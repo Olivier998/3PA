@@ -285,7 +285,7 @@ def generate_mdr_action():
                      selected_dependant_variables[PRED_PROB]].to_numpy(),
                  pos_class_weight=slider_weight.value,
                  filename=txt_filename.value,
-                 fixed_tree=imported_tree)
+                 fixed_tree=None if imported_tree == "" else imported_tree)
     bttn_loading.visible = False
 
 

@@ -14,7 +14,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 class TreeTranscriber:
 
     def __init__(self, tree: VariableTree, dimensions=[20, None], min_ratio_leafs: float = 0.5, THRESHOLD=0.5,
-                 metrics=None):
+                 metrics=None, previous_tree=None):
         if dimensions[1] is None and metrics is not None:
             dimensions[1] = round(2.5 * len(metrics))
         self.tree = tree
@@ -23,12 +23,13 @@ class TreeTranscriber:
         self.min_ratio_leafs = min_ratio_leafs
         self.THRESHOLD = THRESHOLD
         self.metrics = metrics if metrics is not None else ['bal_acc']
+        self.previous_tree = previous_tree
 
     def render_to_bokeh(self, x, y_true, y_prob, min_cas, depth=None, **kwargs):
         if depth is None:
             depth = self.tree.max_depth
 
-        mdr_tool = MDR(pred_cas=min_cas)
+        mdr_tool = MDR(pred_cas=min_cas, previous_tree=self.previous_tree)
 
         nodes, arrows, text = self.__add_node(x=x, y_true=y_true, y_prob=y_prob, min_cas=min_cas,
                                               curr_node=self.tree.head, mdr_tool=mdr_tool,
@@ -55,12 +56,14 @@ class TreeTranscriber:
             node_split = f'{curr_node.feature} <= {round(curr_node.threshold, 4)}'
 
         rect = Rect(x=pos_x, y=pos_y, width=self.width, height=self.height, fill_color='white', line_color='black',
-                    line_width=2, tags=[{'curr_depth': curr_depth, 'node_id': curr_node.node_id,
+                    line_width=5, tags=[{'curr_depth': curr_depth, 'node_id': curr_node.node_id,
                                          'split': node_split,
                                          'samp_ratio': curr_node.samples_ratio},
                                         values_sampratio_dr])
 
-        node_text = [{'x': pos_x - 0.45 * self.width, 'y': pos_y + (0.375 - 1/(1 + len(self.metrics)) * idx) * self.height, 'text': '',
+        node_text = [{'x': pos_x - 0.45 * self.width,
+                      'y': pos_y + (0.375 - 1 / (1 + len(self.metrics)) * idx) * self.height,
+                      'text': '',
                       'metric': metric_name, 'text_font_style': 'italic' if metric_name in ITALIC_VARS else 'normal',
                       'node_id': curr_node.node_id, 'curr_depth': curr_depth}
                      for idx, metric_name in enumerate(self.metrics)]
@@ -141,7 +144,7 @@ class TreeTranscriber:
 
 
 class MDR:
-    def __init__(self, pred_cas, precision=2):
+    def __init__(self, pred_cas, precision=2, previous_tree=None):
         self.n_total = {samp_ratio: len(pred_cas[samp_ratio]) for samp_ratio in pred_cas}
         # unique_accuracies = {samp_ratio: np.sort(np.unique(pred_cas[samp_ratio]))[::-1] for samp_ratio in pred_cas}
         # self.dr = {samp_ratio: {min_perc: sum(pred_cas[samp_ratio] >= min_perc) / self.n_total[samp_ratio]
@@ -161,6 +164,7 @@ class MDR:
         # self.dr = {samp_ratio: {dr: np.sort(pred_cas[samp_ratio])[int(len(pred_cas[samp_ratio]) * (1-dr/100))] for
         #                        dr in range(100, 0, -1)} for samp_ratio in pred_cas}
         self.precision = precision
+        self.previous_tree = previous_tree
 
     def get_metrics(self, Y_target, Y_predicted, Y_prob, pred_cas, samp_ratio, curr_node):
         # unique_accuracies = np.sort(np.unique(np.round(pred_cas, 3)))[::-1]
@@ -184,14 +188,11 @@ class MDR:
                                         Y_predicted[pred_cas >= dr_accuracy]) * 100 if \
                     len(np.unique(Y_target[pred_cas >= dr_accuracy])) > 1 else 0
 
-
                 f1score = f1_score(Y_target[pred_cas >= dr_accuracy],
                                    Y_predicted[pred_cas >= dr_accuracy],
                                    zero_division=0) * 100 if \
                     len(np.unique(Y_target[pred_cas >= dr_accuracy])) > 1 else 0
 
-                # bal_acc = balanced_accuracy_score(Y_target[pred_cas > dr_accuracy],
-                #                                  Y_predicted[pred_cas > dr_accuracy])
                 sensitivity = recall_score(Y_target[pred_cas >= dr_accuracy],
                                            Y_predicted[pred_cas >= dr_accuracy]
                                            , pos_label=1, zero_division=0) * 100
@@ -205,14 +206,27 @@ class MDR:
                 mean_ipc = curr_node.value * 100
                 pos_class_occurence = np.sum(Y_target[pred_cas >= dr_accuracy]) / \
                                       len(Y_target[pred_cas >= dr_accuracy]) * 100
+                if self.previous_tree is None:
+                    previous_comparison = None
+                else:
+                    previous_tree_value = self.previous_tree.get_node_value(node_id=curr_node.node_id, param="value")
+                    previous_comparison = 0.5 + (curr_node.value - previous_tree_value) / 2
+
+                transparency = {'Presence': 1 if perc_node > 0 else 0.25,
+                                'Percentage': 0.25 + 3 * (perc_node / 100) / 4,
+                                # Value based on node percentage remaining ( shifted to [0.25, 1])
+                                'Mean IPC': mean_ipc / 100,
+                                'VS Previous': previous_comparison}
+
                 mdr_values.append({'dr': dr / 100, 'accuracy': acc, 'bal_acc': bal_acc,
                                    'sens': sensitivity, 'spec': specificity, 'perc_node': perc_node,
                                    'perc_pop': perc_pop, 'auc': auc, 'auprc': auprc, 'mean_ca': mean_ca,
                                    'mean_ipc': mean_ipc, 'pos_perc': pos_class_occurence, 'mcc': mcc,
-                                   'f1score': f1score})
+                                   'f1score': f1score, 'transparency': transparency})
 
         for i, values in enumerate(mdr_values):
             for metric in values:
-                mdr_values[i][metric] = round(values[metric], self.precision)
+                if metric != 'transparency':
+                    mdr_values[i][metric] = round(values[metric], self.precision)
         mdr_values = np.array(mdr_values)
         return mdr_values

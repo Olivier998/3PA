@@ -35,6 +35,17 @@ class VariableTree:
                                                         previous_thresh="*")
         return profiles, nodes_numbers
 
+    def get_node_value(self, node_id, param='value'):
+        wanted_node = self.__search_node(node_id=node_id, curr_node=self.head)
+        return wanted_node.__getattribute__(param)
+
+    def __search_node(self, node_id, curr_node):
+        if curr_node.node_id == node_id:
+            return curr_node
+        elif curr_node.c_right.node_id > node_id:
+            return self.__search_node(node_id=node_id, curr_node=curr_node.c_left)
+        return self.__search_node(node_id=node_id, curr_node=curr_node.c_right)
+
     def predict(self, X, depth=None, min_samples_ratio=0):
         """
 
