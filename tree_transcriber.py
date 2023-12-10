@@ -1,4 +1,5 @@
-from bokeh.models import Rect, Arrow
+from bokeh.models import Rect, Arrow, LinearColorMapper, ColorBar
+from bokeh.palettes import RdYlGn10
 from tree_structure import VariableTree, _Node
 import numpy as np
 from sklearn.metrics import accuracy_score, recall_score, roc_auc_score, average_precision_score, matthews_corrcoef, \
@@ -14,7 +15,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 class TreeTranscriber:
 
     def __init__(self, tree: VariableTree, dimensions=[20, None], min_ratio_leafs: float = 0.5, THRESHOLD=0.5,
-                 metrics=None, previous_tree=None):
+                 metrics=None, previous_tree=None, color_palette='RdYlGn10_r'):
         if dimensions[1] is None and metrics is not None:
             dimensions[1] = round(2.5 * len(metrics))
         self.tree = tree
@@ -24,18 +25,24 @@ class TreeTranscriber:
         self.THRESHOLD = THRESHOLD
         self.metrics = metrics if metrics is not None else ['bal_acc']
         self.previous_tree = previous_tree
+        if color_palette == 'RdYlGn10_r':
+            color_palette = list(RdYlGn10)[::-1]
+        self.color = LinearColorMapper(palette=color_palette, low=0, high=1)
 
     def render_to_bokeh(self, x, y_true, y_prob, min_cas, depth=None, **kwargs):
         if depth is None:
             depth = self.tree.max_depth
 
-        mdr_tool = MDR(pred_cas=min_cas, previous_tree=self.previous_tree)
+        mdr_tool = MDR(pred_cas=min_cas, previous_tree=self.previous_tree, color=self.color.palette)
 
         nodes, arrows, text = self.__add_node(x=x, y_true=y_true, y_prob=y_prob, min_cas=min_cas,
                                               curr_node=self.tree.head, mdr_tool=mdr_tool,
                                               remaining_depth=depth, curr_depth=0, **kwargs)
 
-        return nodes, arrows, text
+        # color bar position at (5,6)
+        cb = ColorBar(color_mapper=self.color, location='top_right')  # (0, 0))
+
+        return nodes, arrows, text, cb
 
     def __add_node(self, x, y_true, y_prob, min_cas, mdr_tool, remaining_depth, curr_node, curr_depth, pos_x=0, pos_y=0,
                    **kwargs):
@@ -144,7 +151,7 @@ class TreeTranscriber:
 
 
 class MDR:
-    def __init__(self, pred_cas, precision=2, previous_tree=None):
+    def __init__(self, pred_cas, precision=2, previous_tree=None, color=('#000000')):
         self.n_total = {samp_ratio: len(pred_cas[samp_ratio]) for samp_ratio in pred_cas}
         # unique_accuracies = {samp_ratio: np.sort(np.unique(pred_cas[samp_ratio]))[::-1] for samp_ratio in pred_cas}
         # self.dr = {samp_ratio: {min_perc: sum(pred_cas[samp_ratio] >= min_perc) / self.n_total[samp_ratio]
@@ -165,6 +172,7 @@ class MDR:
         #                        dr in range(100, 0, -1)} for samp_ratio in pred_cas}
         self.precision = precision
         self.previous_tree = previous_tree
+        self.color = color
 
     def get_metrics(self, Y_target, Y_predicted, Y_prob, pred_cas, samp_ratio, curr_node):
         # unique_accuracies = np.sort(np.unique(np.round(pred_cas, 3)))[::-1]
@@ -203,7 +211,7 @@ class MDR:
                 mean_ca = np.mean(pred_cas[pred_cas >= dr_accuracy]) * 100 if \
                     pred_cas[pred_cas >= dr_accuracy].size > 0 \
                     else np.NaN
-                mean_ipc = curr_node.value * 100
+                apc = curr_node.value * 100
                 pos_class_occurence = np.sum(Y_target[pred_cas >= dr_accuracy]) / \
                                       len(Y_target[pred_cas >= dr_accuracy]) * 100
                 if self.previous_tree is None:
@@ -215,18 +223,28 @@ class MDR:
                 transparency = {'Presence': 1 if perc_node > 0 else 0.25,
                                 'Percentage': 0.25 + 3 * (perc_node / 100) / 4,
                                 # Value based on node percentage remaining ( shifted to [0.25, 1])
-                                'Mean IPC': mean_ipc / 100,
+                                'APC': apc / 100,
                                 'VS Previous': previous_comparison}
+
+                colors = {'Presence': ['#000000'] if perc_node > 0 else ['#cccccc'],
+                          'Percentage': self.color[min(int(perc_node / 100 * len(self.color)),
+                                                       len(self.color) - 1)],
+                          # Value based on node percentage remaining ( shifted to [0.25, 1])
+                          'APC': self.color[min(int(apc / 100 * len(self.color)),
+                                                len(self.color) - 1)],
+                          'VS Previous': None if previous_comparison is None else
+                          self.color[min(int(previous_comparison * len(self.color)),
+                                         len(self.color) - 1)]}
 
                 mdr_values.append({'dr': dr / 100, 'accuracy': acc, 'bal_acc': bal_acc,
                                    'sens': sensitivity, 'spec': specificity, 'perc_node': perc_node,
                                    'perc_pop': perc_pop, 'auc': auc, 'auprc': auprc, 'mean_ca': mean_ca,
-                                   'mean_ipc': mean_ipc, 'pos_perc': pos_class_occurence, 'mcc': mcc,
-                                   'f1score': f1score, 'transparency': transparency})
+                                   'apc': apc, 'pos_perc': pos_class_occurence, 'mcc': mcc,
+                                   'f1score': f1score, 'transparency': transparency, 'color': colors})
 
         for i, values in enumerate(mdr_values):
             for metric in values:
-                if metric != 'transparency':
+                if metric not in ['transparency', 'color']:
                     mdr_values[i][metric] = round(values[metric], self.precision)
         mdr_values = np.array(mdr_values)
         return mdr_values

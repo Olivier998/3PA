@@ -37,7 +37,7 @@ BAL_ACC = 'bal_acc'
 F1_SCORE = 'f1score'
 MCC = 'mcc'
 MEAN_CA = 'mean_ca'
-MEAN_IPC = 'mean_ipc'
+APC = 'apc'
 NPV = 'npv'
 PERC_POP = 'perc_pop'
 PERC_NODE = 'perc_node'
@@ -49,17 +49,17 @@ DR = 'dr'
 # POSPRED = 'pospred'
 
 METRICS_DISPLAY = {PERC_POS: '% positive', AUC: 'Auc', AUPRC: 'Auprc', BAL_ACC: 'Bal_Acc', MEAN_CA: 'Mean CA',
-                   MEAN_IPC: 'Mean IPC', PERC_POP: '% pop', PERC_NODE: '% node', SENSITIVITY: 'sens',
+                   APC: 'APC', PERC_POP: '% pop', PERC_NODE: '% node', SENSITIVITY: 'sens',
                    SPECIFICITY: 'spec', DR: 'DR', ACC: 'Acc', MCC: 'Mcc', PPV: 'PPV', NPV: 'NPV', F1_SCORE: 'F1Score'}
 # POSPRED: POSPRED}
 
-METRICS = [PERC_POS, BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, MEAN_CA, MEAN_IPC, PERC_POP, PERC_NODE]
+METRICS = [PERC_POS, BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, MEAN_CA, APC, PERC_POP, PERC_NODE]
 METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPECIFICITY, AUC, AUPRC, MCC, PPV, NPV,
                                                       F1_SCORE]]  # , POSPRED
 
 
-def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_threshold=None, split_valid=False,
-                 fixed_tree=None, return_infos=False):
+def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_threshold=None, split_valid=True,
+                 fixed_tree=None, fixed_ipc=None, return_infos=False):
     global THRESHOLD
     if top_threshold:  # For HOMR model
         if top_threshold < 1:
@@ -70,7 +70,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
         x['y'] = y
         x['predicted_prob'] = predicted_prob
 
-        x_train = x.sample(frac=0.6, random_state=200)
+        x_train = x.sample(frac=0.3, random_state=200)
         x_test = x.drop(x_train.index)
 
         y_train = np.array(x_train['y'])
@@ -117,8 +117,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
                              sizing_mode="stretch_width",
                              styles={"text-align": "center", "font-size": FontSize.SUB_TITLE, "padding": "0.5vw",
                                      "width": "75%", "align-self": "center"})
-    select_transp_options = ["Presence", "Percentage", "Mean IPC"]
-    if fixed_tree is not None:
+    select_transp_options = ["Presence", "Percentage", "APC"]
+    if fixed_tree is not None and fixed_ipc is None:
         select_transp_options += ["VS Previous"]
     select_line_transparency = Select(title="Profiles transparency",
                                       value="Presence",
@@ -144,42 +144,40 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     }
 
     # Base model
-    ca_rf = RandomForestRegressor(random_state=54288)
-
-    # Instantiate the grid search model
-    print('Hyperparameter optimization')
-    grid_search = GridSearchCV(estimator=ca_rf, param_grid=param_grid,
-                               cv=min(4, int(x_train.shape[0] / 2)), n_jobs=-1, verbose=0)
-
-    # Fit the grid search to the data
-    grid_search.fit(x_train, error_prob, sample_weight=sample_weight)
-    print(grid_search.best_params_)
-    print(f"HP done: {int(time.time() - curr_time)}s")
-    curr_time = time.time()
-
-    # Get best model
-    ca_rf = grid_search.best_estimator_
-
-    # ca_rf.fit(x, error_prob, sample_weight=sample_weight)
-    ca_rf_values = ca_rf.predict(x_train)
-    print(f"CA RF: {int(time.time() - curr_time)}s")
-    curr_time = time.time()
-
-    ca_profile = VariableTree(max_depth=max_depth_profile, min_sample_ratio=slider_minleaf.start)
-    ca_profile.fit(x_train, ca_rf_values)
-
-    # Get fixed tree, if specified
-    if fixed_tree:
-        visual_tree = fixed_tree
-        visual_tree.re_fit(x_train, ca_rf_values)
+    if fixed_ipc:
+        ca_rf = fixed_ipc
     else:
-        visual_tree = ca_profile
+        ca_rf = RandomForestRegressor(random_state=54288)
 
-    print(f"CA PROFILE: {int(time.time() - curr_time)}s")
-    curr_time = time.time()
+        # Instantiate the grid search model
+        print('Hyperparameter optimization')
+        grid_search = GridSearchCV(estimator=ca_rf, param_grid=param_grid,
+                                   cv=min(4, int(x_train.shape[0] / 2)), n_jobs=-1, verbose=0)
+
+        # Fit the grid search to the data
+        grid_search.fit(x_train, error_prob, sample_weight=sample_weight)
+        print(grid_search.best_params_)
+
+        # Get best model
+        ca_rf = grid_search.best_estimator_
+
+    if fixed_ipc and fixed_tree:
+        ca_profile = visual_tree = fixed_tree
+    else:
+        ca_rf_values = ca_rf.predict(x_test)
+
+        ca_profile = VariableTree(max_depth=max_depth_profile, min_sample_ratio=slider_minleaf.start)
+        ca_profile.fit(x_test, ca_rf_values)
+
+        # Get fixed tree, if specified
+        if fixed_tree:
+            visual_tree = fixed_tree
+            visual_tree.re_fit(x_test, ca_rf_values)
+        else:
+            visual_tree = ca_profile
 
     ca_rf_values_test = ca_rf.predict(x_test)
-    del ca_rf_values
+
     min_cas = {}
     mdr_sampratio_dict = {'samp_ratio': [], 'values': []}
     for min_perc in range(slider_minleaf.start,
@@ -338,7 +336,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
 
     # Get tree nodes
     tree_getter = TreeTranscriber(tree=visual_tree, min_ratio_leafs=0., metrics=METRICS, previous_tree=fixed_tree)
-    nodes, arrows, nodes_text = tree_getter.render_to_bokeh(x=x_test, y_true=y_test, y_prob=predicted_prob_test,
+    nodes, arrows, nodes_text, cb = tree_getter.render_to_bokeh(x=x_test, y_true=y_test, y_prob=predicted_prob_test,
                                                             min_cas=min_cas)
     print(f"Get tree values: {int(time.time() - curr_time)}s")
     curr_time = time.time()
@@ -348,6 +346,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
 
     for arrow in arrows:
         plot_tree.add_layout(arrow)
+
+    plot_tree.add_layout(cb)
 
     # from list of dict to dict
     nodes_text_dict = {k: [dic[k] for dic in nodes_text] for k in nodes_text[0]}
@@ -398,7 +398,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
                         metric_value = node_values['metrics'][id_min_dr][curr_metric]
                         nodes_labels.data['text'][text_id] = f'{metric_display} = {metric_value}'
             if select_line_transparency.value != "Presence":
-                node.line_alpha = node_values['metrics'][id_min_dr]['transparency'][select_line_transparency.value]
+                node.line_color = node_values['metrics'][id_min_dr]['color'][select_line_transparency.value]
+                # node.line_alpha = node_values['metrics'][id_min_dr]['transparency'][select_line_transparency.value]
 
     print(f"PLOT NODES: {int(time.time() - curr_time)}s")
     curr_time = time.time()
@@ -476,7 +477,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
         
         if (remove_node)
         {  // Remove text of the node
-            nodes[i].line_alpha = 0.25;
+            //nodes[i].line_alpha = 0.25;
+            nodes[i].line_color = '#cccccc';
             for (var j=0; j< labels.data['text'].length; j++)
             {
                 if (nodes[i].tags[0]['node_id'] == labels.data['node_id'][j])
@@ -487,7 +489,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
         }
         else 
         {
-            nodes[i].line_alpha = node_values['metrics'][id_min_dr]['transparency'][select_line_transparency.value];
+            //nodes[i].line_alpha = node_values['metrics'][id_min_dr]['transparency'][select_line_transparency.value];
+            nodes[i].line_color = node_values['metrics'][id_min_dr]['color'][select_line_transparency.value];
             //nodes[i].line_alpha = 1;
             for (var j=0; j< labels.data['text'].length; j++)
             {
@@ -651,9 +654,10 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     with open(path, 'w') as file:
         file.write(html)
 
-    # Save fitted tree to keep its structure
+    # Save fitted models
+    fitted_models = {'ipc': ca_rf, 'apc': ca_profile}
     with open(filename + '.pkl', 'wb') as f:
-        pickle.dump(ca_profile, f)
+        pickle.dump(fitted_models, f)
 
     # Save json file
     path_json = os.path.abspath(filename + '.json')
@@ -663,7 +667,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     webbrowser.open(url=path)
 
     if return_infos:
-        return ca_profile, mdr_sampratio_dict['values'][index_current_data]
+        return fitted_models, mdr_sampratio_dict['values'][index_current_data]
 
 
 if __name__ == '__main__':
@@ -679,4 +683,4 @@ if __name__ == '__main__':
     # x=df[['x1', 'x2']]
     # y=df['y_true'].to_numpy()
     # y_pred=df['pred_prob'].to_numpy()
-    generate_mdr(x, y, y_pred)
+    generate_mdr(x, y, y_pred, split_valid=False)

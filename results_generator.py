@@ -10,11 +10,15 @@ from sklearn.metrics import accuracy_score, roc_auc_score, balanced_accuracy_sco
 from mdr_figure_maker import generate_mdr
 
 # Constants
+# FIXED_IPC = True
 FIXED_TREE = True
 pos_label = 1
 y_true_str = 'y_true'
-saved_files = 'hosp/1129/'
+saved_files = 'hosp/1209/'
 all_metrics = pd.DataFrame()
+UNFIXED = "unfixed/"
+FIXED_APC = "fixedapc/"
+FIXED_ALL = "fixedall/"
 
 
 def save_metrics(y_true, y_pred, y_prob, df_name):
@@ -28,10 +32,10 @@ def save_metrics(y_true, y_pred, y_prob, df_name):
     all_metrics[df_name] = metrics
 
 
-def save_mdr_metrics(mdr_curves, df_name):
+def save_mdr_metrics(mdr_curves, df_name, fixed_ipc, fixed_apc):
     global all_metrics
 
-    metrics_vals = {'df': df_name}
+    metrics_vals = {'df': df_name, 'fixed_ipc': fixed_ipc, 'fixed_apc': fixed_apc}
     metrics_names = ["Acc", "Bal_Acc", "sens", "spec", "Auc", "Auprc"]
     for metric_name in metrics_names:
         metrics_vals[metric_name] = round(mdr_curves[metric_name][0], 3)
@@ -49,7 +53,7 @@ def save_mdr_metrics(mdr_curves, df_name):
 
 
 def produce_results(df_mimic, df_eicu):
-    global FIXED_TREE, pos_label, y_true_str, saved_files
+    global FIXED_TREE, pos_label, y_true_str, saved_files, UNFIXED, FIXED_ALL, FIXED_APC
 
     # get mimic df
     df_0 = df_mimic[(df_mimic['anchor_year_group'] == '2008 - 2010') | (df_mimic['anchor_year_group'] == '2011 - 2013')]
@@ -150,14 +154,23 @@ def produce_results(df_mimic, df_eicu):
 
     # Generate MDR
     hosp_class_imbalance = len(y_0_valid[y_0_valid == pos_label]) / len(y_0_valid)
-    fixed_tree, mdr_valid = generate_mdr(x=df_0_valid_score, y=y_0_valid, predicted_prob=y_0_valid_prob,
-                                         pos_class_weight=1 - round(hosp_class_imbalance, 2),
-                                         filename=saved_files + "mimic_valid_2008",
-                                         split_valid=False, return_infos=True)
-    save_mdr_metrics(mdr_valid, "MIMICValid")
+    fitted_models, mdr_valid = generate_mdr(x=df_0_valid_score, y=y_0_valid, predicted_prob=y_0_valid_prob,
+                                            pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                                            filename=saved_files + UNFIXED + "mimic_valid_2008",
+                                            split_valid=True, return_infos=True)
+    fixed_tree = fitted_models['apc']
+    fixed_ipc = fitted_models['ipc']
+    save_mdr_metrics(mdr_valid, "MIMICValid", fixed_ipc=False, fixed_apc=False)
 
-    if not FIXED_TREE:
-        fixed_tree = None
+    _, mdr_valid = generate_mdr(x=df_0_valid_score, y=y_0_valid, predicted_prob=y_0_valid_prob,
+                                            pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                                            filename=saved_files + FIXED_ALL + "mimic_valid_2008",
+                                            split_valid=True, return_infos=True,
+                                            fixed_tree=fixed_tree, fixed_ipc=fixed_ipc)
+    save_mdr_metrics(mdr_valid, "MIMICValid", fixed_ipc=True, fixed_apc=True)
+
+    # if not FIXED_TREE:
+    #     fixed_tree = None
 
     # MIMIC 2008 (50%) & MIMIC 2014 (50%)
     df_0_half = df_0_valid_score.sample(frac=0.5, random_state=54288)
@@ -169,18 +182,43 @@ def produce_results(df_mimic, df_eicu):
 
     hosp_class_imbalance = len(y_01[y_01 == pos_label]) / len(y_01)
     _, mdr_01 = generate_mdr(x=df_01_score, y=y_01, predicted_prob=y_01_prob,
-                             pos_class_weight=1 - round(hosp_class_imbalance, 2), filename=saved_files + "mimic_0814",
-                             fixed_tree=fixed_tree, return_infos=True)
+                             pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                             filename=saved_files + UNFIXED + "mimic_0814",
+                             split_valid=True, fixed_tree=None, fixed_ipc=None, return_infos=True)
+    save_mdr_metrics(mdr_01, 'MIMIC0814', fixed_ipc=False, fixed_apc=False)
 
-    save_mdr_metrics(mdr_01, 'MIMIC0814')
+    _, mdr_01 = generate_mdr(x=df_01_score, y=y_01, predicted_prob=y_01_prob,
+                             pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                             filename=saved_files + FIXED_APC + "mimic_0814",
+                             split_valid=True, fixed_tree=fixed_tree, fixed_ipc=None, return_infos=True)
+    save_mdr_metrics(mdr_01, 'MIMIC0814', fixed_ipc=False, fixed_apc=True)
+
+    _, mdr_01 = generate_mdr(x=df_01_score, y=y_01, predicted_prob=y_01_prob,
+                             pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                             filename=saved_files + FIXED_ALL + "mimic_0814",
+                             split_valid=False, fixed_tree=fixed_tree, fixed_ipc=fixed_ipc, return_infos=True)
+    save_mdr_metrics(mdr_01, 'MIMIC0814', fixed_ipc=True, fixed_apc=True)
 
     # MIMIC 2014
     hosp_class_imbalance = len(y_1[y_1 == pos_label]) / len(y_1)
     _, mdr_1 = generate_mdr(x=df_1_score, y=y_1, predicted_prob=y_1_prob,
-                            pos_class_weight=1 - round(hosp_class_imbalance, 2), filename=saved_files + "mimic_2014",
-                            fixed_tree=fixed_tree, return_infos=True)
+                            pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                            filename=saved_files + UNFIXED + "mimic_2014",
+                            split_valid=True, fixed_tree=None, fixed_ipc=None, return_infos=True)
+    save_mdr_metrics(mdr_1, 'MIMIC2014', fixed_ipc=False, fixed_apc=False)
 
-    save_mdr_metrics(mdr_1, 'MIMIC2014')
+    _, mdr_1 = generate_mdr(x=df_1_score, y=y_1, predicted_prob=y_1_prob,
+                            pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                            filename=saved_files + FIXED_APC + "mimic_2014",
+                            split_valid=True, fixed_tree=fixed_tree, fixed_ipc=None, return_infos=True)
+    save_mdr_metrics(mdr_1, 'MIMIC2014', fixed_ipc=False, fixed_apc=True)
+
+    _, mdr_1 = generate_mdr(x=df_1_score, y=y_1, predicted_prob=y_1_prob,
+                            pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                            filename=saved_files + FIXED_ALL + "mimic_2014",
+                            split_valid=False, fixed_tree=fixed_tree, fixed_ipc=fixed_ipc, return_infos=True)
+    save_mdr_metrics(mdr_1, 'MIMIC2014', fixed_ipc=True, fixed_apc=True)
+
 
     # MIMIC 2014 (50%) & MIMIC 2017 (50%)
     df_1_otherhalf = df_1_score.loc[~df_1_score.index.isin(df_1_half.index)]
@@ -191,39 +229,83 @@ def produce_results(df_mimic, df_eicu):
     df_12_score = pd.concat([df_1_otherhalf, df_2_half], ignore_index=True)
 
     hosp_class_imbalance = len(y_01[y_01 == pos_label]) / len(y_01)
-    _, mdr_01 = generate_mdr(x=df_12_score, y=y_12, predicted_prob=y_12_prob,
-                             pos_class_weight=1 - round(hosp_class_imbalance, 2), filename=saved_files + "mimic_1417",
-                             fixed_tree=fixed_tree, return_infos=True)
 
-    save_mdr_metrics(mdr_01, 'MIMIC1417')
+    _, mdr_01 = generate_mdr(x=df_12_score, y=y_12, predicted_prob=y_12_prob,
+                             pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                             filename=saved_files + UNFIXED + "mimic_1417",
+                             split_valid=True, fixed_tree=None, fixed_ipc=None, return_infos=True)
+    save_mdr_metrics(mdr_01, 'MIMIC1417', fixed_ipc=False, fixed_apc=False)
+
+    _, mdr_01 = generate_mdr(x=df_12_score, y=y_12, predicted_prob=y_12_prob,
+                             pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                             filename=saved_files + FIXED_APC + "mimic_1417",
+                             split_valid=True, fixed_tree=fixed_tree, fixed_ipc=None, return_infos=True)
+    save_mdr_metrics(mdr_01, 'MIMIC1417', fixed_ipc=False, fixed_apc=True)
+
+    _, mdr_01 = generate_mdr(x=df_12_score, y=y_12, predicted_prob=y_12_prob,
+                             pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                             filename=saved_files + FIXED_ALL + "mimic_1417",
+                             split_valid=False, fixed_tree=fixed_tree, fixed_ipc=fixed_ipc, return_infos=True)
+    save_mdr_metrics(mdr_01, 'MIMIC1417', fixed_ipc=True, fixed_apc=True)
 
     # MIMIC 2017
     hosp_class_imbalance = len(y_2[y_2 == pos_label]) / len(y_2)
+
     _, mdr_2 = generate_mdr(x=df_2_score, y=y_2, predicted_prob=y_2_prob,
-                            pos_class_weight=1 - round(hosp_class_imbalance, 2), filename=saved_files + "mimic_2017",
-                            fixed_tree=fixed_tree, return_infos=True)
-    save_mdr_metrics(mdr_2, "MIMIC2017")
+                            pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                            filename=saved_files + UNFIXED + "mimic_2017",
+                            split_valid=True, fixed_tree=None, fixed_ipc=None, return_infos=True)
+    save_mdr_metrics(mdr_2, "MIMIC2017", fixed_ipc=False, fixed_apc=False)
+
+    _, mdr_2 = generate_mdr(x=df_2_score, y=y_2, predicted_prob=y_2_prob,
+                            pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                            filename=saved_files + FIXED_APC + "mimic_2017",
+                            split_valid=True, fixed_tree=fixed_tree, fixed_ipc=None, return_infos=True)
+    save_mdr_metrics(mdr_2, "MIMIC2017", fixed_ipc=False, fixed_apc=True)
+
+    _, mdr_2 = generate_mdr(x=df_2_score, y=y_2, predicted_prob=y_2_prob,
+                            pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                            filename=saved_files + FIXED_ALL + "mimic_2017",
+                            split_valid=False, fixed_tree=fixed_tree, fixed_ipc=fixed_ipc, return_infos=True)
+    save_mdr_metrics(mdr_2, "MIMIC2017", fixed_ipc=True, fixed_apc=True)
 
     # eICU
-    # for hid in hosp_id:
-    #     df_hid = df_eicu_score[df_eicu_score['hospitalid'] == hid].drop(columns=['hospitalid']).reset_index(drop=True)
-    #     if df_hid.shape[0] >= 200:
-    #         # df_hid.to_csv(f'../../../data/mimic_mimic/meicu/df_m0_eicu{hid}.csv', index=False)
-    #
-    #         hosp_y = df_hid.pop(y_true_str).to_numpy()  # df_hid[y_true_str].to_numpy()
-    #         hosp_y_prob = df_hid.pop('probability').to_numpy()
-    #         hosp_y_pred = df_hid.pop('prediction').to_numpy()
-    #
-    #         # Save metrics for specific hospital
-    #         # save_metrics(y_true=hosp_y, y_pred=hosp_y_pred, y_prob=hosp_y_prob, df_name='eicu_' + str(hid))
-    #
-    #         hosp_filename = saved_files + 'meicu/hosp_' + str(hid)
-    #         hosp_class_imbalance = len(hosp_y[hosp_y == pos_label]) / len(hosp_y)
-    #
-    #         _, mdr_hosp = generate_mdr(x=df_hid, y=hosp_y, predicted_prob=hosp_y_prob,
-    #                                    pos_class_weight=1 - round(hosp_class_imbalance, 2), filename=hosp_filename,
-    #                                    split_valid=False, fixed_tree=fixed_tree, return_infos=True)
-    #         save_mdr_metrics(mdr_hosp, f"eICU_{hid}")
+    for hid in hosp_id:
+        df_hid = df_eicu_score[df_eicu_score['hospitalid'] == hid].drop(columns=['hospitalid']).reset_index(drop=True)
+        if df_hid.shape[0] >= 200:
+            # df_hid.to_csv(f'../../../data/mimic_mimic/meicu/df_m0_eicu{hid}.csv', index=False)
+
+            hosp_y = df_hid.pop(y_true_str).to_numpy()  # df_hid[y_true_str].to_numpy()
+            hosp_y_prob = df_hid.pop('probability').to_numpy()
+            hosp_y_pred = df_hid.pop('prediction').to_numpy()
+
+            # Save metrics for specific hospital
+            # save_metrics(y_true=hosp_y, y_pred=hosp_y_pred, y_prob=hosp_y_prob, df_name='eicu_' + str(hid))
+
+            hosp_filename = saved_files + 'meicu/hosp_' + str(hid)
+            hosp_class_imbalance = len(hosp_y[hosp_y == pos_label]) / len(hosp_y)
+
+            _, mdr_hosp = generate_mdr(x=df_hid, y=hosp_y, predicted_prob=hosp_y_prob,
+                                       pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                                       filename=hosp_filename + UNFIXED,
+                                       split_valid=True,
+                                       fixed_tree=None, fixed_ipc=None, return_infos=True)
+            save_mdr_metrics(mdr_hosp, f"eICU_{hid}", fixed_ipc=False, fixed_apc=False)
+
+            _, mdr_hosp = generate_mdr(x=df_hid, y=hosp_y, predicted_prob=hosp_y_prob,
+                                       pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                                       filename=hosp_filename + FIXED_APC,
+                                       split_valid=True,
+                                       fixed_tree=fixed_tree, fixed_ipc=None, return_infos=True)
+            save_mdr_metrics(mdr_hosp, f"eICU_{hid}", fixed_ipc=False, fixed_apc=True)
+
+            _, mdr_hosp = generate_mdr(x=df_hid, y=hosp_y, predicted_prob=hosp_y_prob,
+                                       pos_class_weight=1 - round(hosp_class_imbalance, 2),
+                                       filename=hosp_filename + FIXED_ALL,
+                                       split_valid=False,
+                                       fixed_tree=fixed_tree, fixed_ipc=fixed_ipc, return_infos=True)
+            save_mdr_metrics(mdr_hosp, f"eICU_{hid}", fixed_ipc=True, fixed_apc=True)
+
     all_metrics.to_csv(saved_files + "results.csv", index=False)
 
 

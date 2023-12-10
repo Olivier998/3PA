@@ -8,7 +8,7 @@ from sklearn.metrics import balanced_accuracy_score, recall_score, roc_auc_score
 from bokeh.io import curdoc
 from bokeh.layouts import row, column, layout
 from bokeh.models import Slider, Div, FileInput, MultiSelect, Select, Button, TextInput, \
-    SVGIcon, Column, ColumnDataSource, Circle
+    SVGIcon, Switch
 from bokeh.plotting import figure
 from functools import partial
 
@@ -25,10 +25,12 @@ curr_doc = curdoc()
 
 # Global variables
 imported_data = pd.DataFrame()
-imported_tree = ""
+imported_apc = None
+imported_ipc = None
 selected_dependant_variables = {TRUE_LABEL: '',
                                 # PRED_LABEL: '',
                                 PRED_PROB: ''}
+RETRAIN_IPC = False
 THRESHOLD = 0.5
 
 # Tool header
@@ -83,14 +85,27 @@ predictive_variables = MultiSelect(title="Chosen predictors (second and third la
 # ### Import fixed tree
 # Tree Upload Button
 def upload_tree(attr, old, new):
-    global imported_tree
+    global imported_apc, imported_ipc
     decoded = b64decode(tree_inputer.value)
-    imported_tree = pickle.loads(decoded)
+    pickle_obj = pickle.loads(decoded)
+    imported_apc = pickle_obj['apc']
+    imported_ipc = pickle_obj['ipc']
 
 
 tree_inputer = FileInput(title="Upload pkl file for fixed tree", accept=[".pkl"],
                          styles={"text-align": "center", "font-size": FontSize.NORMAL})
 tree_inputer.on_change('filename', upload_tree)
+
+retrain_ipc_switch = Switch(active=False,  # title="Retrain IPC",
+                            styles={"text-align": "center", "font-size": FontSize.NORMAL})
+
+
+def retrain_ipc_switch_action(attr, old, new):
+    global RETRAIN_IPC
+    RETRAIN_IPC = not RETRAIN_IPC
+
+
+retrain_ipc_switch.on_change('active', retrain_ipc_switch_action)
 
 
 # ### Import data
@@ -285,7 +300,8 @@ def generate_mdr_action():
                      selected_dependant_variables[PRED_PROB]].to_numpy(),
                  pos_class_weight=slider_weight.value,
                  filename=txt_filename.value,
-                 fixed_tree=None if imported_tree == "" else imported_tree)
+                 fixed_tree=imported_apc,
+                 fixed_ipc=imported_ipc if RETRAIN_IPC else None)
     bttn_loading.visible = False
 
 
@@ -303,7 +319,7 @@ layout_output = layout(
     [
         [tool_header],
         [column(column(data_import_header,
-                       row(file_inputer, sel_true_label, sel_pred_prob, tree_inputer,  # sel_pred_label
+                       row(file_inputer, sel_true_label, sel_pred_prob, tree_inputer, retrain_ipc_switch,  # sel_pred_label
                            sizing_mode="stretch_width"),
                        bttn_update_glob_res,
                        warning_bttn_update_glob_res,
