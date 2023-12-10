@@ -27,6 +27,8 @@ import numpy as np
 import time
 import json
 
+from copy import deepcopy
+
 THRESHOLD = 0.5
 
 # Metrics names
@@ -61,6 +63,11 @@ METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPEC
 def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_threshold=None, split_valid=True,
                  fixed_tree=None, fixed_ipc=None, return_infos=False):
     global THRESHOLD
+
+    x = deepcopy(x)
+    y = deepcopy(y)
+    predicted_prob = deepcopy(predicted_prob)
+
     if top_threshold:  # For HOMR model
         if top_threshold < 1:
             top_threshold = int(top_threshold * len(predicted_prob))
