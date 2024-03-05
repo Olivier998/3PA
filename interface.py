@@ -301,7 +301,7 @@ def generate_mdr_action():
                  pos_class_weight=slider_weight.value,
                  filename=txt_filename.value,
                  fixed_tree=imported_apc,
-                 fixed_ipc=imported_ipc if RETRAIN_IPC else None)
+                 fixed_ipc=imported_ipc if not RETRAIN_IPC else None)
     bttn_loading.visible = False
 
 

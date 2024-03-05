@@ -61,14 +61,16 @@ METRICS_MDR = [METRICS_DISPLAY[metric] for metric in [BAL_ACC, SENSITIVITY, SPEC
 
 
 def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_threshold=None, split_valid=True,
-                 fixed_tree=None, fixed_ipc=None, return_infos=False):
+                 fixed_tree=None, fixed_ipc=None, return_infos=False, threshold=None):
     global THRESHOLD
 
     x = deepcopy(x)
     y = deepcopy(y)
     predicted_prob = deepcopy(predicted_prob)
 
-    if top_threshold:  # For HOMR model
+    if threshold:
+        THRESHOLD = threshold
+    elif top_threshold:  # For HOMR model
         if top_threshold < 1:
             top_threshold = int(top_threshold * len(predicted_prob))
         THRESHOLD = sorted(predicted_prob)[-top_threshold]
@@ -77,7 +79,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
         x['y'] = y
         x['predicted_prob'] = predicted_prob
 
-        x_train = x.sample(frac=0.3, random_state=200)
+        x_train = x.sample(frac=0.5, random_state=200)
         x_test = x.drop(x_train.index)
 
         y_train = np.array(x_train['y'])
@@ -140,10 +142,12 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
 
     # Section to train misclassification model
     # y_pred_train = np.array([1 if y_score_i >= THRESHOLD else 0 for y_score_i in predicted_prob_train])
-    error_prob = 1 - np.abs(y_train - predicted_prob_train)
-    sample_weight = np.array([pos_class_weight / (1 - THRESHOLD) if yi == 1 else
-                              (1 - pos_class_weight) / THRESHOLD for yi in y_train])
-    # np.array([pos_class_weight if yi == 1 else 1 - pos_class_weight for yi in y])
+    #error_prob = 1 + np.log(1 - 1.63*np.abs(y_train - predicted_prob_train))#**(1/2)
+    # error_prob = 1 - np.abs(y_train - predicted_prob_train)**(1/2)
+    error_prob = 1/(1+np.exp(10 * np.log(3) * (np.abs(y_train - predicted_prob_train) - THRESHOLD)))
+    # sample_weight = np.array([pos_class_weight / (1 - THRESHOLD) if yi == 1 else
+    #                           (1 - pos_class_weight) / THRESHOLD for yi in y_train])
+    sample_weight = np.array([pos_class_weight if yi == 1 else 1 - pos_class_weight for yi in y_train])
 
     # Parameter grid
     param_grid = {
@@ -157,13 +161,13 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
         ca_rf = RandomForestRegressor(random_state=54288)
 
         # Instantiate the grid search model
-        print('Hyperparameter optimization')
+        # print('Hyperparameter optimization')
         grid_search = GridSearchCV(estimator=ca_rf, param_grid=param_grid,
                                    cv=min(4, int(x_train.shape[0] / 2)), n_jobs=-1, verbose=0)
 
         # Fit the grid search to the data
         grid_search.fit(x_train, error_prob, sample_weight=sample_weight)
-        print(grid_search.best_params_)
+        # print(grid_search.best_params_)
 
         # Get best model
         ca_rf = grid_search.best_estimator_
@@ -178,7 +182,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
 
         # Get fixed tree, if specified
         if fixed_tree:
-            visual_tree = fixed_tree
+            visual_tree = deepcopy(fixed_tree)
             visual_tree.re_fit(x_test, ca_rf_values)
         else:
             visual_tree = ca_profile
@@ -332,8 +336,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     plot_metrics.legend.label_text_font_size = '0.75vw'
     plot_metrics.right = plot_metrics.legend
 
-    print(f"PLOT MDR: {int(time.time() - curr_time)}s")
-    curr_time = time.time()
+    # print(f"PLOT MDR: {int(time.time() - curr_time)}s")
+    # curr_time = time.time()
 
     # Plot tree
     plot_tree = figure(aspect_ratio=1, aspect_scale=1, match_aspect=True,
@@ -345,8 +349,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     tree_getter = TreeTranscriber(tree=visual_tree, min_ratio_leafs=0., metrics=METRICS, previous_tree=fixed_tree)
     nodes, arrows, nodes_text, cb = tree_getter.render_to_bokeh(x=x_test, y_true=y_test, y_prob=predicted_prob_test,
                                                             min_cas=min_cas)
-    print(f"Get tree values: {int(time.time() - curr_time)}s")
-    curr_time = time.time()
+    # print(f"Get tree values: {int(time.time() - curr_time)}s")
+    # curr_time = time.time()
 
     for node in nodes:
         plot_tree.add_glyph(node)
@@ -363,8 +367,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     nodes_labelset = LabelSet(x='x', y='y', text='text', text_font_style='text_font_style', source=nodes_labels)
     plot_tree.add_layout(nodes_labelset)
 
-    print(f"PLOT TREE: {int(time.time() - curr_time)}s")
-    curr_time = time.time()
+    # print(f"PLOT TREE: {int(time.time() - curr_time)}s")
+    # curr_time = time.time()
 
     # Set nodes text values
     for node in nodes:
@@ -408,8 +412,8 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
                 node.line_color = node_values['metrics'][id_min_dr]['color'][select_line_transparency.value]
                 # node.line_alpha = node_values['metrics'][id_min_dr]['transparency'][select_line_transparency.value]
 
-    print(f"PLOT NODES: {int(time.time() - curr_time)}s")
-    curr_time = time.time()
+    # print(f"PLOT NODES: {int(time.time() - curr_time)}s")
+    # curr_time = time.time()
 
     cjs = CustomJS(args=dict(labels=[nodes_labelset], width=20, figure=plot_tree), code="""
     var ratio = (4 * width / (figure.x_range.end-figure.x_range.start));
@@ -486,6 +490,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
         {  // Remove text of the node
             //nodes[i].line_alpha = 0.25;
             nodes[i].line_color = '#cccccc';
+            nodes[i].fill_color = '#cccccc';
             for (var j=0; j< labels.data['text'].length; j++)
             {
                 if (nodes[i].tags[0]['node_id'] == labels.data['node_id'][j])
@@ -498,6 +503,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
         {
             //nodes[i].line_alpha = node_values['metrics'][id_min_dr]['transparency'][select_line_transparency.value];
             nodes[i].line_color = node_values['metrics'][id_min_dr]['color'][select_line_transparency.value];
+            nodes[i].fill_color = node_values['metrics'][id_min_dr]['color'][select_line_transparency.value];
             //nodes[i].line_alpha = 1;
             for (var j=0; j< labels.data['text'].length; j++)
             {
@@ -671,7 +677,7 @@ def generate_mdr(x, y, predicted_prob, pos_class_weight=0.5, filename=None, top_
     with open(path_json, 'w') as file:
         json.dump(mdr_sampratio_dict, file)
 
-    webbrowser.open(url=path)
+    # webbrowser.open(url=path)
 
     if return_infos:
         return fitted_models, mdr_sampratio_dict['values'][index_current_data]

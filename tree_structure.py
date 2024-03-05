@@ -103,8 +103,8 @@ class VariableTree:
         return curr_node
 
     def re_fit_children(self, curr_node, X, y, n0):
-        node_value = y.mean() if len(y)>0 else np.nan
-        node_max = y.max() if len(y)>0 else np.nan
+        node_value = y.mean() if len(y)>0 else 0
+        node_max = y.max() if len(y)>0 else 0
         node_samples_ratio = X.shape[0] / n0 * 100
 
         curr_node.re_fit(value=node_value, value_max=node_max, samples_ratio=node_samples_ratio)
@@ -185,7 +185,7 @@ class _Node:
         if type(X) == DataFrame:
             X_value = X[self.feature]
         elif type(X) == Series:
-            X_value = X[self.feature_id]
+            X_value = X.iloc[self.feature_id]
         else:
             raise TypeError(f"Parameter X is of type {type(X)}, but it must be of type "
                             f"'pandas.DataFrame' or 'pandas.Series'.")
